@@ -23,6 +23,42 @@ function resolveLanding(role) {
   return LANDING_BY_ROLE[role] ?? LANDING_BY_ROLE[DEFAULT_ROLE];
 }
 
+function hideCurrentNavLink() {
+  const path = window.location.pathname;
+  let current = path.split("/").pop() || "";
+  if (!current || current === "index.html") {
+    current = "dashboard.html";
+  }
+
+  document.querySelectorAll("header.topbar nav a").forEach((link) => {
+    const href = link.getAttribute("href");
+    if (href === current) {
+      link.remove();
+    }
+  });
+}
+
+async function fetchRoleFromStaff(email) {
+  if (!email) return null;
+  const { data, error } = await supabaseClient
+    .from("staff")
+    .select("role")
+    .eq("email", email)
+    .maybeSingle();
+  if (error) {
+    console.error(error);
+    return null;
+  }
+  return data?.role ?? null;
+}
+
+async function resolveRoleForSession(session) {
+  if (!session) return DEFAULT_ROLE;
+  const email = session.user?.email;
+  const staffRole = await fetchRoleFromStaff(email);
+  return staffRole ?? extractRole(session);
+}
+
 if (loginForm) {
   loginForm.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -48,7 +84,7 @@ if (loginForm) {
       return;
     }
 
-    const role = extractRole(data?.user ?? data?.session);
+    const role = await resolveRoleForSession(data?.session ?? data?.user);
     window.location.href = resolveLanding(role);
   });
 }
@@ -59,6 +95,10 @@ if (logoutButton) {
     window.location.href = "index.html";
   });
 }
+
+document.addEventListener("DOMContentLoaded", () => {
+  hideCurrentNavLink();
+});
 
 /**
  * Redirects to the login page if there is no active Supabase session.
@@ -85,7 +125,7 @@ async function requireAuth(options = {}) {
     return null;
   }
 
-  const role = extractRole(session);
+  const role = await resolveRoleForSession(session);
 
   if (Array.isArray(allowedRoles) && allowedRoles.length > 0) {
     if (!allowedRoles.includes(role)) {
@@ -110,3 +150,4 @@ function applyRoleVisibility(role) {
 window.requireAuth = requireAuth;
 window.resolveLandingByRole = resolveLanding;
 window.applyRoleVisibility = applyRoleVisibility;
+window.resolveRoleForSession = resolveRoleForSession;

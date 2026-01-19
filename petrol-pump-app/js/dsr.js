@@ -1,6 +1,7 @@
 /* global supabaseClient, requireAuth, applyRoleVisibility */
 
 const PRODUCTS = ["petrol", "diesel"];
+let currentUserId = null;
 
 const readingNumberFields = [
   "opening_pump1_nozzle1",
@@ -32,9 +33,13 @@ const stockNumberFields = [
 ];
 
 document.addEventListener("DOMContentLoaded", async () => {
-  const auth = await requireAuth({ allowedRoles: ["admin"], onDenied: "credit.html" });
+  const auth = await requireAuth({
+    allowedRoles: ["admin", "supervisor"],
+    onDenied: "credit.html",
+  });
   if (!auth) return;
 
+  currentUserId = auth.session?.user?.id ?? null;
   applyRoleVisibility(auth.role);
 
   PRODUCTS.forEach((product) => {
@@ -72,6 +77,9 @@ function initReadingForm(product) {
       product,
       remarks: formData.get("remarks") || null,
     };
+    if (currentUserId) {
+      payload.created_by = currentUserId;
+    }
 
     readingNumberFields.forEach((field) => {
       payload[field] = toNumber(formData.get(field));
@@ -122,6 +130,9 @@ function initStockForm(product) {
       product,
       remark: formData.get("remark") || null,
     };
+    if (currentUserId) {
+      payload.created_by = currentUserId;
+    }
 
     stockNumberFields.forEach((field) => {
       payload[field] = toNumber(formData.get(field));

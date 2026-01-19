@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Daily Sales Summary · Petrol Pump</title>
+    <link rel="stylesheet" href="css/style.css" />
+    <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script defer src="js/supabase.js"></script>
+    <script defer src="js/auth.js"></script>
+    <script defer src="js/sales-daily.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>Total Sale (L)</h1>
+      <nav>
+        <a href="dashboard.html">Dashboard</a>
+        <a href="dsr.html">Daily Sales Report</a>
+        <a href="credit.html">Credit Ledger</a>
+        <a href="expenses.html">Expenses</a>
+        <a href="attendance.html">Attendance</a>
+        <a href="settings.html" data-role="admin-only">Settings</a>
+        <button id="logout-button" class="link">Logout</button>
+      </nav>
+    </header>
+
+    <main class="stack">
+      <section class="card">
+        <div class="card-head">
+          <div>
+            <h2>Day-wise readings</h2>
+            <p class="muted">View meter readings, sales, stock, and variation.</p>
+          </div>
+          <div class="form-grid">
+            <div class="form-field">
+              <label for="sales-start-date">From</label>
+              <input id="sales-start-date" type="date" />
+            </div>
+            <div class="form-field">
+              <label for="sales-end-date">To</label>
+              <input id="sales-end-date" type="date" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Daily entries</h2>
+        <div class="table-scroll">
+          <table class="dsr-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Product</th>
+                <th>Sales P1 (L)</th>
+                <th>Sales P2 (L)</th>
+                <th>Total sales (L)</th>
+                <th>Testing (L)</th>
+                <th>Net sale (L)</th>
+                <th>Dip stock (L)</th>
+                <th>Opening stock (L)</th>
+                <th>Receipts (L)</th>
+                <th>Closing stock (L)</th>
+                <th>Variation (L)</th>
+              </tr>
+            </thead>
+            <tbody id="sales-daily-body">
+              <tr>
+                <td colspan="12" class="muted">Loading…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

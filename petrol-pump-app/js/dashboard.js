@@ -1,8 +1,10 @@
 /* global supabaseClient, requireAuth, applyRoleVisibility, formatCurrency */
 
+let snapshotDsrRows = [];
+
 document.addEventListener("DOMContentLoaded", async () => {
   const auth = await requireAuth({
-    allowedRoles: ["admin"],
+    allowedRoles: ["admin", "supervisor"],
     onDenied: "credit.html",
   });
   if (!auth) return;
@@ -15,40 +17,147 @@ document.addEventListener("DOMContentLoaded", async () => {
     operatorInfo.textContent = session.user.email;
   }
 
+  const snapshotDateInput = document.getElementById("snapshot-date");
+  const petrolRateInput = document.getElementById("snapshot-petrol-rate");
+  const dieselRateInput = document.getElementById("snapshot-diesel-rate");
+  const todayStr = new Date().toISOString().slice(0, 10);
+  if (snapshotDateInput) {
+    snapshotDateInput.value = todayStr;
+    snapshotDateInput.addEventListener("change", async () => {
+      const dateValue = snapshotDateInput.value || todayStr;
+      await Promise.all([loadTodaySales(dateValue), loadCreditSummary(dateValue)]);
+    });
+  }
+  if (petrolRateInput) {
+    petrolRateInput.addEventListener("input", () => {
+      updateTotalSaleRupees();
+      updateNetSaleRupeesFromCache();
+    });
+  }
+  if (dieselRateInput) {
+    dieselRateInput.addEventListener("input", () => {
+      updateTotalSaleRupees();
+      updateNetSaleRupeesFromCache();
+    });
+  }
+
   await Promise.all([
-    loadTodaySales(),
-    loadCreditSummary(),
+    loadTodaySales(todayStr),
+    loadCreditSummary(todayStr),
+    initializeDsrDashboard(),
     loadRecentActivity(),
   ]);
 });
 
-async function loadTodaySales() {
+async function initializeDsrDashboard() {
+  const rangeSelect = document.getElementById("dsr-range");
+  const startInput = document.getElementById("dsr-start");
+  const endInput = document.getElementById("dsr-end");
+  const form = document.getElementById("dsr-filter-form");
+  const customRange = document.getElementById("dsr-custom-range");
+  const label = document.getElementById("dsr-date-label");
+
+  if (!rangeSelect || !startInput || !endInput || !form || !customRange) {
+    return;
+  }
+
+  rangeSelect.value = "this-month";
+  setCustomRangeVisibility(customRange, startInput, endInput, false);
+  const initialRange = getRangeForSelection(
+    rangeSelect.value,
+    startInput,
+    endInput
+  );
+  if (initialRange) {
+    updateDsrLabel(initialRange, initialRange.modeInfo);
+    await loadDsrSummary(initialRange);
+  }
+
+  rangeSelect.addEventListener("change", async () => {
+    const isCustom = rangeSelect.value === "custom";
+    setCustomRangeVisibility(customRange, startInput, endInput, isCustom);
+    if (isCustom) {
+      if (!startInput.value && !endInput.value) {
+        const today = new Date();
+        startInput.value = formatDateInput(today);
+        endInput.value = formatDateInput(today);
+      }
+      if (label) {
+        label.textContent = "Select custom dates";
+      }
+      return;
+    }
+
+    const range = getRangeForSelection(
+      rangeSelect.value,
+      startInput,
+      endInput
+    );
+    if (!range) return;
+    updateDsrLabel(range, range.modeInfo);
+    await loadDsrSummary(range);
+  });
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const range = getRangeForSelection(
+      rangeSelect.value,
+      startInput,
+      endInput
+    );
+    if (!range) return;
+    updateDsrLabel(range, range.modeInfo);
+    await loadDsrSummary(range);
+  });
+
+  const handleCustomChange = async () => {
+    if (rangeSelect.value !== "custom") return;
+    const range = getRangeForSelection(
+      rangeSelect.value,
+      startInput,
+      endInput
+    );
+    if (!range) return;
+    updateDsrLabel(range, range.modeInfo);
+    await loadDsrSummary(range);
+  };
+
+  startInput.addEventListener("change", handleCustomChange);
+  endInput.addEventListener("change", handleCustomChange);
+}
+
+async function loadTodaySales(dateStr) {
   const todayStat = document.getElementById("today-total");
+  const todayRupees = document.getElementById("today-total-rupees");
   const todayDate = document.getElementById("today-date");
 
-  const today = new Date();
-  const dateStr = today.toISOString().slice(0, 10);
+  const selectedDate = dateStr || new Date().toISOString().slice(0, 10);
 
   const { data, error } = await supabaseClient
     .from("dsr")
-    .select("total_sales")
-    .eq("date", dateStr);
+    .select("product, total_sales")
+    .eq("date", selectedDate);
 
   if (error) {
     console.error(error);
     if (todayStat) todayStat.textContent = "—";
     if (todayDate) todayDate.textContent = "Unable to load";
+    if (todayRupees) todayRupees.textContent = "—";
     return;
   }
 
-  const total = (data ?? []).reduce(
+  snapshotDsrRows = data ?? [];
+
+  const totalLiters = snapshotDsrRows.reduce(
     (sum, row) => sum + Number(row.total_sales ?? 0),
     0
   );
 
-  if (todayStat) todayStat.textContent = formatCurrency(total);
+  if (todayStat) todayStat.textContent = formatQuantity(totalLiters);
+  updateTotalSaleRupees();
   if (todayDate) {
-    todayDate.textContent = `for ${today.toLocaleDateString("en-IN", {
+    const labelDate = new Date(`${selectedDate}T00:00:00`);
+    todayDate.textContent = `for ${labelDate.toLocaleDateString("en-IN", {
       weekday: "short",
       month: "short",
       day: "numeric",
@@ -56,11 +165,48 @@ async function loadTodaySales() {
   }
 }
 
-async function loadCreditSummary() {
+function updateTotalSaleRupees() {
+  const todayRupees = document.getElementById("today-total-rupees");
+  if (!todayRupees) return;
+
+  const petrolRateInput = document.getElementById("snapshot-petrol-rate");
+  const dieselRateInput = document.getElementById("snapshot-diesel-rate");
+  const petrolRate = Number(petrolRateInput?.value || 0);
+  const dieselRate = Number(dieselRateInput?.value || 0);
+
+  if (!Number.isFinite(petrolRate) && !Number.isFinite(dieselRate)) {
+    todayRupees.textContent = "—";
+    return;
+  }
+
+  const petrolLiters = sumByProduct(
+    snapshotDsrRows,
+    "petrol",
+    (row) => row.total_sales
+  );
+  const dieselLiters = sumByProduct(
+    snapshotDsrRows,
+    "diesel",
+    (row) => row.total_sales
+  );
+  const totalAmount = petrolLiters * petrolRate + dieselLiters * dieselRate;
+
+  if (!petrolRate && !dieselRate) {
+    todayRupees.textContent = "—";
+    return;
+  }
+
+  todayRupees.textContent = formatCurrency(totalAmount);
+}
+
+async function loadCreditSummary(dateStr) {
   const creditTotal = document.getElementById("credit-total");
+  const selectedDate = dateStr || new Date().toISOString().slice(0, 10);
+  const endOfDay = `${selectedDate}T23:59:59.999Z`;
   const { data, error } = await supabaseClient
     .from("credit_customers")
-    .select("amount_due");
+    .select("amount_due")
+    .lte("created_at", endOfDay);
 
   if (error) {
     console.error(error);
@@ -85,7 +231,7 @@ async function loadRecentActivity() {
     await Promise.all([
       supabaseClient
         .from("dsr")
-        .select("date, product, shift, total_sales, created_at")
+        .select("date, product, total_sales, created_at")
         .order("created_at", { ascending: false })
         .limit(4),
       supabaseClient
@@ -103,7 +249,7 @@ async function loadRecentActivity() {
   (dsrData ?? []).forEach((row) => {
     entries.push({
       type: "DSR",
-      label: `${row.product?.toUpperCase() ?? ""} · ${row.shift}`,
+      label: `${row.product?.toUpperCase() ?? ""}`,
       detail: formatCurrency(row.total_sales),
       timestamp: row.created_at ?? row.date,
     });
@@ -133,4 +279,332 @@ async function loadRecentActivity() {
     li.innerHTML = `<strong>${entry.type}:</strong> ${entry.label} · ${entry.detail}`;
     list.appendChild(li);
   });
+}
+
+async function loadDsrSummary(range) {
+  const petrolStockEl = document.getElementById("dsr-petrol-stock");
+  const dieselStockEl = document.getElementById("dsr-diesel-stock");
+  const petrolNetSaleEl = document.getElementById("dsr-petrol-net-sale");
+  const dieselNetSaleEl = document.getElementById("dsr-diesel-net-sale");
+  const petrolNetSaleRupeesEl = document.getElementById(
+    "dsr-petrol-net-sale-rupees"
+  );
+  const dieselNetSaleRupeesEl = document.getElementById(
+    "dsr-diesel-net-sale-rupees"
+  );
+  const petrolVariationEl = document.getElementById("dsr-petrol-variation");
+  const dieselVariationEl = document.getElementById("dsr-diesel-variation");
+  const expenseEl = document.getElementById("dsr-expense");
+  const plNetSaleEl = document.getElementById("pl-net-sale");
+  const plExpenseEl = document.getElementById("pl-expense");
+  const plValueEl = document.getElementById("pl-value");
+  const plLabelEl = document.getElementById("pl-label");
+
+  if (petrolStockEl) petrolStockEl.textContent = "Loading…";
+  if (dieselStockEl) dieselStockEl.textContent = "Loading…";
+  if (petrolNetSaleEl) petrolNetSaleEl.textContent = "Loading…";
+  if (dieselNetSaleEl) dieselNetSaleEl.textContent = "Loading…";
+  if (petrolNetSaleRupeesEl) petrolNetSaleRupeesEl.textContent = "Loading…";
+  if (dieselNetSaleRupeesEl) dieselNetSaleRupeesEl.textContent = "Loading…";
+  if (petrolVariationEl) petrolVariationEl.textContent = "Loading…";
+  if (dieselVariationEl) dieselVariationEl.textContent = "Loading…";
+  if (expenseEl) expenseEl.textContent = "Loading…";
+  if (plNetSaleEl) plNetSaleEl.textContent = "Loading…";
+  if (plExpenseEl) plExpenseEl.textContent = "Loading…";
+  if (plValueEl) plValueEl.textContent = "Loading…";
+
+  const [
+    { data: dsrData, error: dsrError },
+    { data: stockData, error: stockError },
+    { data: expenseData, error: expenseError },
+  ] = await Promise.all([
+    supabaseClient
+      .from("dsr")
+      .select("product, total_sales, testing, stock")
+      .gte("date", range.start)
+      .lte("date", range.end),
+    supabaseClient
+      .from("dsr_stock")
+      .select("product, variation")
+      .gte("date", range.start)
+      .lte("date", range.end),
+    supabaseClient
+      .from("expenses")
+      .select("amount")
+      .gte("date", range.start)
+      .lte("date", range.end),
+  ]);
+
+  if (dsrError) console.error(dsrError);
+  if (stockError) console.error(stockError);
+  if (expenseError) console.error(expenseError);
+
+  const hasDsr = !dsrError;
+  const hasStock = !stockError;
+  const hasExpense = !expenseError;
+
+  const petrolStock = sumByProduct(dsrData, "petrol", (row) => row.stock);
+  const dieselStock = sumByProduct(dsrData, "diesel", (row) => row.stock);
+  const petrolNetSale = sumByProduct(
+    dsrData,
+    "petrol",
+    (row) => Number(row.total_sales ?? 0) - Number(row.testing ?? 0)
+  );
+  const dieselNetSale = sumByProduct(
+    dsrData,
+    "diesel",
+    (row) => Number(row.total_sales ?? 0) - Number(row.testing ?? 0)
+  );
+  const totalNetSale = petrolNetSale + dieselNetSale;
+  const petrolVariation = sumByProduct(
+    stockData,
+    "petrol",
+    (row) => row.variation
+  );
+  const dieselVariation = sumByProduct(
+    stockData,
+    "diesel",
+    (row) => row.variation
+  );
+  const expenseTotal = (expenseData ?? []).reduce(
+    (sum, row) => sum + Number(row.amount ?? 0),
+    0
+  );
+
+  if (petrolStockEl) {
+    petrolStockEl.textContent = hasDsr ? formatQuantity(petrolStock) : "—";
+  }
+  if (dieselStockEl) {
+    dieselStockEl.textContent = hasDsr ? formatQuantity(dieselStock) : "—";
+  }
+  if (petrolNetSaleEl) {
+    petrolNetSaleEl.textContent = hasDsr ? formatQuantity(petrolNetSale) : "—";
+  }
+  if (dieselNetSaleEl) {
+    dieselNetSaleEl.textContent = hasDsr ? formatQuantity(dieselNetSale) : "—";
+  }
+  updateNetSaleRupees(petrolNetSale, dieselNetSale, hasDsr);
+  if (petrolVariationEl) {
+    petrolVariationEl.textContent = hasStock ? formatQuantity(petrolVariation) : "—";
+    applyVariationTone(petrolVariationEl, petrolVariation, hasStock);
+  }
+  if (dieselVariationEl) {
+    dieselVariationEl.textContent = hasStock ? formatQuantity(dieselVariation) : "—";
+    applyVariationTone(dieselVariationEl, dieselVariation, hasStock);
+  }
+  if (expenseEl) {
+    expenseEl.textContent = hasExpense ? formatCurrency(expenseTotal) : "—";
+  }
+
+  if (plNetSaleEl) {
+    plNetSaleEl.textContent = hasDsr ? formatCurrency(totalNetSale) : "—";
+  }
+  if (plExpenseEl) {
+    plExpenseEl.textContent = hasExpense ? formatCurrency(expenseTotal) : "—";
+  }
+
+  if (plValueEl && plLabelEl) {
+    if (!hasDsr || !hasExpense) {
+      plValueEl.textContent = "—";
+      plLabelEl.textContent = "Profit / Loss";
+      plValueEl.classList.remove("stat-negative", "stat-positive");
+    } else {
+      const profitLoss = totalNetSale - expenseTotal;
+      plValueEl.textContent = formatCurrency(profitLoss);
+      plLabelEl.textContent = profitLoss >= 0 ? "Profit" : "Loss";
+      plValueEl.classList.toggle("stat-positive", profitLoss >= 0);
+      plValueEl.classList.toggle("stat-negative", profitLoss < 0);
+    }
+  }
+}
+
+function getRangeForSelection(selection, startInput, endInput) {
+  const today = new Date();
+
+  if (selection === "this-week") {
+    return {
+      ...getWeekRange(today),
+      modeInfo: { mode: "this-week" },
+    };
+  }
+
+  if (selection === "this-month") {
+    return {
+      ...getMonthRange(today.getFullYear(), today.getMonth()),
+      modeInfo: { mode: "this-month" },
+    };
+  }
+
+  if (selection === "custom") {
+    const range = getCustomRange(startInput.value, endInput.value);
+    if (!range) return null;
+    return { ...range, modeInfo: { mode: "custom" } };
+  }
+
+  return null;
+}
+
+function getCustomRange(startValue, endValue) {
+  if (!startValue && !endValue) return null;
+  let start = startValue || endValue;
+  let end = endValue || startValue;
+  if (end < start) {
+    [start, end] = [end, start];
+  }
+  return { start, end };
+}
+
+function getMonthRange(year, monthIndex) {
+  const start = new Date(year, monthIndex, 1);
+  const end = new Date(year, monthIndex + 1, 0);
+  return {
+    start: formatDateInput(start),
+    end: formatDateInput(end),
+  };
+}
+
+function getWeekRange(date) {
+  const day = date.getDay();
+  const diffToMonday = (day + 6) % 7;
+  const start = new Date(date);
+  start.setDate(date.getDate() - diffToMonday);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  return {
+    start: formatDateInput(start),
+    end: formatDateInput(end),
+  };
+}
+
+function updateDsrLabel(range, modeInfo) {
+  const label = document.getElementById("dsr-date-label");
+  if (!label) return;
+
+  if (modeInfo?.mode === "this-month") {
+    const monthDate = new Date(`${range.start}T00:00:00`);
+    const monthLabel = monthDate.toLocaleDateString("en-IN", {
+      month: "long",
+      year: "numeric",
+    });
+    label.textContent = `This month · ${monthLabel}`;
+    return;
+  }
+
+  if (modeInfo?.mode === "this-week") {
+    const startLabel = formatDisplayDate(range.start);
+    const endLabel = formatDisplayDate(range.end);
+    label.textContent = `This week · ${startLabel} – ${endLabel}`;
+    return;
+  }
+
+  const startLabel = formatDisplayDate(range.start);
+  const endLabel = formatDisplayDate(range.end);
+  label.textContent =
+    startLabel === endLabel
+      ? `Date: ${startLabel}`
+      : `Custom range: ${startLabel} – ${endLabel}`;
+}
+
+function setCustomRangeVisibility(container, startInput, endInput, isVisible) {
+  container.classList.toggle("hidden", !isVisible);
+  startInput.disabled = !isVisible;
+  endInput.disabled = !isVisible;
+}
+
+function formatDateInput(date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+function formatDisplayDate(dateStr) {
+  const date = new Date(`${dateStr}T00:00:00`);
+  return date.toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function formatQuantity(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return "—";
+  }
+  return Number(value).toLocaleString("en-IN", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
+}
+
+function sumByProduct(rows, product, valueFn) {
+  return (rows ?? []).reduce((sum, row) => {
+    if (row.product !== product) return sum;
+    return sum + Number(valueFn(row) ?? 0);
+  }, 0);
+}
+
+function applyVariationTone(element, value, isActive) {
+  element.classList.remove("stat-positive", "stat-negative");
+  if (!isActive) return;
+  if (value > 0) {
+    element.classList.add("stat-positive");
+  } else if (value < 0) {
+    element.classList.add("stat-negative");
+  }
+}
+
+function updateNetSaleRupees(petrolLiters, dieselLiters, isActive) {
+  const petrolNetSaleRupeesEl = document.getElementById(
+    "dsr-petrol-net-sale-rupees"
+  );
+  const dieselNetSaleRupeesEl = document.getElementById(
+    "dsr-diesel-net-sale-rupees"
+  );
+  if (!petrolNetSaleRupeesEl || !dieselNetSaleRupeesEl) return;
+
+  if (!isActive) {
+    petrolNetSaleRupeesEl.textContent = "—";
+    dieselNetSaleRupeesEl.textContent = "—";
+    return;
+  }
+
+  const petrolRate = Number(
+    document.getElementById("snapshot-petrol-rate")?.value || 0
+  );
+  const dieselRate = Number(
+    document.getElementById("snapshot-diesel-rate")?.value || 0
+  );
+
+  if (!petrolRate) {
+    petrolNetSaleRupeesEl.textContent = "—";
+  } else {
+    petrolNetSaleRupeesEl.textContent = formatCurrency(
+      petrolLiters * petrolRate
+    );
+  }
+
+  if (!dieselRate) {
+    dieselNetSaleRupeesEl.textContent = "—";
+  } else {
+    dieselNetSaleRupeesEl.textContent = formatCurrency(
+      dieselLiters * dieselRate
+    );
+  }
+}
+
+function updateNetSaleRupeesFromCache() {
+  if (!snapshotDsrRows?.length) return;
+  const petrolNetSale = sumByProduct(
+    snapshotDsrRows,
+    "petrol",
+    (row) => Number(row.total_sales ?? 0) - Number(row.testing ?? 0)
+  );
+  const dieselNetSale = sumByProduct(
+    snapshotDsrRows,
+    "diesel",
+    (row) => Number(row.total_sales ?? 0) - Number(row.testing ?? 0)
+  );
+  updateNetSaleRupees(petrolNetSale, dieselNetSale, true);
 }
