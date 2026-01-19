@@ -265,6 +265,24 @@ tbody tr:hover {
   color: #475569;
 }
 
+.meter-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.meter-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.meter-title {
+  margin: 0;
+  font-size: 1rem;
+  color: #1f2933;
+}
+
 .sheet-remarks label {
   display: block;
   font-weight: 600;
@@ -313,6 +331,38 @@ tbody tr:hover {
 .meter-table td {
   padding: 0.45rem 0.35rem;
   font-size: 0.72rem;
+}
+
+.meter-table.compact input {
+  width: 15ch;
+  max-width: 100%;
+}
+
+.meter-table.compact input[type="date"] {
+  width: 100%;
+  min-width: 160px;
+}
+
+.meter-table input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.meter-table input[type="number"]::-webkit-outer-spin-button,
+.meter-table input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .stock-table,
