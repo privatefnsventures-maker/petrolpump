@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dashboard · Petrol Pump</title>
+    <link rel="stylesheet" href="css/style.css" />
+    <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script defer src="js/supabase.js"></script>
+    <script defer src="js/auth.js"></script>
+    <script defer src="js/dashboard.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>Operations Dashboard</h1>
+      <nav>
+        <a href="dsr.html">Daily Sales Report</a>
+        <a href="credit.html">Credit Ledger</a>
+        <button id="logout-button" class="link">Logout</button>
+      </nav>
+    </header>
+
+    <main>
+      <section class="card">
+        <h2>Welcome back</h2>
+        <p id="operator-info" class="muted">Loading operator details…</p>
+      </section>
+
+      <section class="grid">
+        <article class="card">
+          <h3>Today’s Sales</h3>
+          <p class="stat" id="today-total">&#8212;</p>
+          <small id="today-date" class="muted"></small>
+        </article>
+        <article class="card">
+          <h3>Open Credit</h3>
+          <p class="stat" id="credit-total">&#8212;</p>
+          <small class="muted">Total due across customers</small>
+        </article>
+      </section>
+
+      <section class="card">
+        <h3>Recent Activity</h3>
+        <ul id="recent-log" class="activity"></ul>
+      </section>
+    </main>
+
+    <footer>
+      <small>Need help? Contact your administrator.</small>
+    </footer>
+  </body>
+</html>
