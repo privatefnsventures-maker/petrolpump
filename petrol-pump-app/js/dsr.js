@@ -264,19 +264,21 @@ function updateDerivedFields(form) {
   const closingP2N2 = getNumber(form, "closing_pump2_nozzle2");
   const testing = getNumber(form, "testing");
   const stock = getNumber(form, "stock");
+  const openingStock = getNumber(form, "opening_stock");
+  const receipts = getNumber(form, "receipts");
 
   const salesPump1 = (closingP1N1 - openingP1N1) + (closingP1N2 - openingP1N2);
   const salesPump2 = (closingP2N1 - openingP2N1) + (closingP2N2 - openingP2N2);
   const totalSales = salesPump1 + salesPump2;
   const netSale = totalSales - testing;
-  const netStock = stock - netSale;
-  const variation = totalSales - stock;
+  const totalStock = openingStock + receipts;
+  const variation = stock - (totalStock - netSale);
 
   setNumber(form, "sales_pump1", salesPump1);
   setNumber(form, "sales_pump2", salesPump2);
   setNumber(form, "total_sales", totalSales);
   setNumber(form, "net_sale", netSale);
-  setNumber(form, "net_stock", netStock);
+  setNumber(form, "total_stock", totalStock);
   setNumber(form, "variation", variation);
 }
 
