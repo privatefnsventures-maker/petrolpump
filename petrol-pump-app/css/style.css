@@ -252,6 +252,14 @@ tbody tr:hover {
   text-align: right;
 }
 
+.dsr-table input[type="text"] {
+  text-align: right;
+}
+
+.dsr-table .meter-reading {
+  font-variant-numeric: tabular-nums;
+}
+
 .dsr-table .calc-field[readonly] {
   background: #f8fafc;
   color: #475569;
@@ -294,7 +302,17 @@ tbody tr:hover {
 
 .meter-table,
 .meter-history {
-  min-width: 1400px;
+  min-width: 0;
+}
+
+.meter-table {
+  table-layout: fixed;
+}
+
+.meter-table th,
+.meter-table td {
+  padding: 0.45rem 0.35rem;
+  font-size: 0.72rem;
 }
 
 .stock-table,
