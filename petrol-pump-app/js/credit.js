@@ -4,18 +4,21 @@ document.addEventListener("DOMContentLoaded", async () => {
   const auth = await requireAuth({ allowedRoles: ["admin", "supervisor"] });
   if (!auth) return;
 
-  const { role } = auth;
+  const { role, session } = auth;
+  const currentUserId = session?.user?.id ?? null;
   applyRoleVisibility(role);
 
   const form = document.getElementById("credit-form");
   if (form) {
-    form.addEventListener("submit", handleCreditSubmit);
+    form.addEventListener("submit", (event) =>
+      handleCreditSubmit(event, currentUserId)
+    );
   }
 
   loadCreditLedger();
 });
 
-async function handleCreditSubmit(event) {
+async function handleCreditSubmit(event, currentUserId) {
   event.preventDefault();
 
   const successEl = document.getElementById("credit-success");
@@ -33,6 +36,9 @@ async function handleCreditSubmit(event) {
     last_payment: formData.get("last_payment") || null,
     notes: formData.get("notes") || null,
   };
+  if (currentUserId) {
+    payload.created_by = currentUserId;
+  }
 
   const { error } = await supabaseClient
     .from("credit_customers")

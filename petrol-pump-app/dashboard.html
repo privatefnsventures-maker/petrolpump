@@ -12,31 +12,208 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Operations Dashboard</h1>
+      <h1>Bishnupriya Fuels</h1>
       <nav>
+        <a href="dashboard.html">Dashboard</a>
         <a href="dsr.html">Daily Sales Report</a>
         <a href="credit.html">Credit Ledger</a>
+        <a href="expenses.html">Expenses</a>
+        <a href="attendance.html">Attendance</a>
+        <a href="analysis.html" data-role="admin-only">Analysis</a>
+        <a href="settings.html" data-role="admin-only">Settings</a>
         <button id="logout-button" class="link">Logout</button>
       </nav>
     </header>
 
     <main>
-      <section class="card">
+      <section class="card hero-card">
         <h2>Welcome back</h2>
         <p id="operator-info" class="muted">Loading operator details…</p>
       </section>
 
-      <section class="grid">
-        <article class="card">
-          <h3>Today’s Sales</h3>
-          <p class="stat" id="today-total">&#8212;</p>
-          <small id="today-date" class="muted"></small>
-        </article>
-        <article class="card">
-          <h3>Open Credit</h3>
-          <p class="stat" id="credit-total">&#8212;</p>
-          <small class="muted">Total due across customers</small>
-        </article>
+      <section class="card">
+        <div class="card-head snapshot-head">
+          <div>
+            <h2>Daily Snapshot</h2>
+            <p class="muted">Select a past date to review totals.</p>
+          </div>
+          <div class="snapshot-controls">
+            <div class="form-field">
+              <label for="snapshot-date">Date</label>
+              <input id="snapshot-date" type="date" />
+            </div>
+            <div class="form-field">
+              <label for="snapshot-petrol-rate">Petrol rate (₹/L)</label>
+              <input
+                id="snapshot-petrol-rate"
+                type="number"
+                inputmode="decimal"
+                step="0.01"
+                min="0"
+                placeholder="Optional"
+              />
+            </div>
+            <div class="form-field">
+              <label for="snapshot-diesel-rate">Diesel rate (₹/L)</label>
+              <input
+                id="snapshot-diesel-rate"
+                type="number"
+                inputmode="decimal"
+                step="0.01"
+                min="0"
+                placeholder="Optional"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div class="grid">
+          <a class="card-link" href="sales-daily.html">
+            <article class="card highlight-card clickable-card">
+              <h3>Total Sale</h3>
+              <div class="metric-row">
+                <div class="metric-box">
+                  <small class="muted">Quantity (L)</small>
+                  <p class="stat" id="today-total">&#8212;</p>
+                </div>
+                <div class="metric-box">
+                  <small class="muted">Price (₹)</small>
+                  <p class="stat stat-sub" id="today-total-rupees">&#8212;</p>
+                </div>
+              </div>
+              <small id="today-date" class="muted"></small>
+            </article>
+          </a>
+          <a class="card-link" href="credit-overdue.html">
+            <article class="card highlight-card clickable-card">
+              <h3>Open Credit</h3>
+              <p class="stat" id="credit-total">&#8212;</p>
+              <small class="muted">Total due across customers</small>
+            </article>
+          </a>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <div>
+            <h2>DSR Dashboard</h2>
+            <p id="dsr-date-label" class="muted">Loading DSR summary…</p>
+          </div>
+        </div>
+
+        <form id="dsr-filter-form" class="dsr-filter" autocomplete="off">
+          <div class="form-field">
+            <label for="dsr-range">Range</label>
+            <select id="dsr-range">
+              <option value="this-week">This week</option>
+              <option value="this-month" selected>This month</option>
+              <option value="custom">Custom dates</option>
+            </select>
+          </div>
+          <div id="dsr-custom-range" class="custom-range hidden">
+            <div class="form-field">
+              <label for="dsr-start">From</label>
+              <input id="dsr-start" type="date" />
+            </div>
+            <div class="form-field">
+              <label for="dsr-end">To</label>
+              <input id="dsr-end" type="date" />
+            </div>
+          </div>
+          <div class="filter-actions">
+            <button type="submit" id="dsr-apply">Apply</button>
+          </div>
+        </form>
+
+        <div class="fuel-grid">
+          <article class="card fuel-card">
+            <h3>Petrol</h3>
+            <div class="metric-row">
+              <div class="metric-box wide">
+                <small class="muted">Net sale</small>
+                <div class="metric-inline">
+                  <div>
+                    <p class="stat" id="dsr-petrol-net-sale">&#8212;</p>
+                    <small class="muted">L</small>
+                  </div>
+                  <div>
+                    <p class="stat stat-sub" id="dsr-petrol-net-sale-rupees">&#8212;</p>
+                    <small class="muted">₹</small>
+                  </div>
+                </div>
+              </div>
+              <div class="metric-box">
+                <small class="muted">Stock (L)</small>
+                <p class="stat" id="dsr-petrol-stock">&#8212;</p>
+              </div>
+              <div class="metric-box">
+                <small class="muted">Variation (L)</small>
+                <p class="stat" id="dsr-petrol-variation">&#8212;</p>
+              </div>
+            </div>
+          </article>
+          <article class="card fuel-card">
+            <h3>Diesel</h3>
+            <div class="metric-row">
+              <div class="metric-box wide">
+                <small class="muted">Net sale</small>
+                <div class="metric-inline">
+                  <div>
+                    <p class="stat" id="dsr-diesel-net-sale">&#8212;</p>
+                    <small class="muted">L</small>
+                  </div>
+                  <div>
+                    <p class="stat stat-sub" id="dsr-diesel-net-sale-rupees">&#8212;</p>
+                    <small class="muted">₹</small>
+                  </div>
+                </div>
+              </div>
+              <div class="metric-box">
+                <small class="muted">Stock (L)</small>
+                <p class="stat" id="dsr-diesel-stock">&#8212;</p>
+              </div>
+              <div class="metric-box">
+                <small class="muted">Variation (L)</small>
+                <p class="stat" id="dsr-diesel-variation">&#8212;</p>
+              </div>
+            </div>
+          </article>
+          <article class="card fuel-card">
+            <h3>Expenses</h3>
+            <div class="stat-grid">
+              <article class="stat-tile">
+                <h4>Total (₹)</h4>
+                <p class="stat" id="dsr-expense">&#8212;</p>
+                <small class="muted">Logged expenses in range</small>
+              </article>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="card" data-role="admin-only">
+        <div class="card-head">
+          <div>
+            <h2>Profit &amp; Loss</h2>
+            <p class="muted">Admin-only summary for the selected range.</p>
+          </div>
+        </div>
+
+        <div class="stat-grid">
+          <article class="stat-tile">
+            <h3>Net sale (₹)</h3>
+            <p class="stat" id="pl-net-sale">&#8212;</p>
+          </article>
+          <article class="stat-tile">
+            <h3>Total expense (₹)</h3>
+            <p class="stat" id="pl-expense">&#8212;</p>
+          </article>
+          <article class="stat-tile">
+            <h3 id="pl-label">Profit</h3>
+            <p class="stat" id="pl-value">&#8212;</p>
+          </article>
+        </div>
       </section>
 
       <section class="card">

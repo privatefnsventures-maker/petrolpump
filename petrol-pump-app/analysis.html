@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Analysis · Petrol Pump</title>
+    <link rel="stylesheet" href="css/style.css" />
+    <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script defer src="js/supabase.js"></script>
+    <script defer src="js/auth.js"></script>
+    <script defer src="js/analysis.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>Analysis</h1>
+      <nav>
+        <a href="dashboard.html">Dashboard</a>
+        <a href="dsr.html">Daily Sales Report</a>
+        <a href="credit.html">Credit Ledger</a>
+        <a href="expenses.html">Expenses</a>
+        <a href="attendance.html">Attendance</a>
+        <a href="analysis.html" data-role="admin-only">Analysis</a>
+        <a href="settings.html" data-role="admin-only">Settings</a>
+        <button id="logout-button" class="link">Logout</button>
+      </nav>
+    </header>
+
+    <main class="stack">
+      <section class="card">
+        <h2>Business Growth</h2>
+        <p class="muted">
+          This page will track sales, profit, and growth trends. Tell me which
+          metrics and charts you want to prioritize.
+        </p>
+      </section>
+    </main>
+  </body>
+</html>

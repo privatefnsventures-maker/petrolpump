@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Settings · Petrol Pump</title>
+    <link rel="stylesheet" href="css/style.css" />
+    <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script defer src="js/supabase.js"></script>
+    <script defer src="js/auth.js"></script>
+    <script defer src="js/settings.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>Settings</h1>
+      <nav>
+        <a href="dashboard.html">Dashboard</a>
+        <a href="dsr.html">Daily Sales Report</a>
+        <a href="credit.html">Credit Ledger</a>
+        <a href="expenses.html">Expenses</a>
+        <a href="attendance.html">Attendance</a>
+        <a href="settings.html" data-role="admin-only">Settings</a>
+        <button id="logout-button" class="link">Logout</button>
+      </nav>
+    </header>
+
+    <main class="stack">
+      <section class="card">
+        <h2>Add or update user role</h2>
+        <p class="muted">
+          Assign roles to operator emails. Roles control access in the dashboard.
+        </p>
+        <form id="settings-form" class="form">
+          <div class="form-grid">
+            <label for="staff-email">Email</label>
+            <input
+              id="staff-email"
+              name="email"
+              type="email"
+              placeholder="operator@company.com"
+              required
+            />
+
+            <label for="staff-role">Role</label>
+            <select id="staff-role" name="role" required>
+              <option value="supervisor">Supervisor</option>
+              <option value="admin">Admin</option>
+            </select>
+
+            <label for="staff-password">Set password</label>
+            <input
+              id="staff-password"
+              name="password"
+              type="password"
+              placeholder="Leave empty to skip"
+              minlength="6"
+            />
+          </div>
+
+          <p class="muted">
+            Provide a password to create a new login. Leave it empty to only update
+            the role for an existing user.
+          </p>
+          <button type="submit">Save role</button>
+          <p id="settings-success" class="success hidden">Role saved.</p>
+          <p id="settings-error" class="error hidden"></p>
+        </form>
+      </section>
+
+      <section class="card">
+        <h2>Current access list</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Email</th>
+              <th>Role</th>
+              <th>Created</th>
+            </tr>
+          </thead>
+          <tbody id="settings-table-body">
+            <tr>
+              <td colspan="3" class="muted">Loading…</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </main>
+  </body>
+</html>
