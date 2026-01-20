@@ -29,12 +29,12 @@ async function loadOpenCredit(dateStr) {
   tbody.innerHTML = "<tr><td colspan='5' class='muted'>Loading…</td></tr>";
 
   const endOfDay = `${dateStr}T23:59:59.999Z`;
+  // Use created_at <= endOfDay AND (last_payment is null OR last_payment <= dateStr).
+  // Fetch outstanding rows and filter client-side by effective payment/creation date
   const { data, error } = await supabaseClient
     .from("credit_customers")
     .select("customer_name, vehicle_no, amount_due, last_payment, created_at")
     .gt("amount_due", 0)
-    .lte("created_at", endOfDay)
-    .or(`last_payment.is.null,last_payment.lt.${dateStr}`)
     .order("amount_due", { ascending: false });
 
   if (error) {
@@ -50,18 +50,29 @@ async function loadOpenCredit(dateStr) {
     return;
   }
 
-  const totalDue = data.reduce(
-    (sum, row) => sum + Number(row.amount_due ?? 0),
-    0
-  );
+  const asOfDate = new Date(`${dateStr}T23:59:59.999Z`);
+  const filtered = (data ?? []).filter((row) => {
+    const last = row.last_payment ? new Date(`${row.last_payment}T00:00:00Z`) : null;
+    const created = row.created_at ? new Date(row.created_at) : null;
+    const effective = last || created;
+    if (!effective) return false;
+    return effective.getTime() <= asOfDate.getTime();
+  });
+
+  if (!filtered.length) {
+    tbody.innerHTML =
+      "<tr><td colspan='5' class='muted'>No outstanding credits.</td></tr>";
+    if (summary) summary.textContent = `No pending credits on ${dateStr}.`;
+    return;
+  }
+
+  const totalDue = filtered.reduce((sum, row) => sum + Number(row.amount_due ?? 0), 0);
   if (summary) {
-    summary.textContent = `${data.length} customers · ${formatCurrency(
-      totalDue
-    )} outstanding`;
+    summary.textContent = `${filtered.length} customers · ${formatCurrency(totalDue)} outstanding`;
   }
 
   tbody.innerHTML = "";
-  data.forEach((row) => {
+  filtered.forEach((row) => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${row.customer_name}</td>

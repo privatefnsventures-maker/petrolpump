@@ -21,6 +21,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   const petrolRateInput = document.getElementById("snapshot-petrol-rate");
   const dieselRateInput = document.getElementById("snapshot-diesel-rate");
   const todayStr = new Date().toISOString().slice(0, 10);
+  // Default fuel prices
+  if (petrolRateInput && !petrolRateInput.value) petrolRateInput.value = "101.19";
+  if (dieselRateInput && !dieselRateInput.value) dieselRateInput.value = "92.12";
   if (snapshotDateInput) {
     snapshotDateInput.value = todayStr;
     snapshotDateInput.addEventListener("change", async () => {
@@ -202,11 +205,13 @@ function updateTotalSaleRupees() {
 async function loadCreditSummary(dateStr) {
   const creditTotal = document.getElementById("credit-total");
   const selectedDate = dateStr || new Date().toISOString().slice(0, 10);
-  const endOfDay = `${selectedDate}T23:59:59.999Z`;
+  const endOfDay = new Date(`${selectedDate}T23:59:59.999Z`).getTime();
+
+  // Fetch outstanding rows and filter client-side by last_payment (fallback to created_at)
   const { data, error } = await supabaseClient
     .from("credit_customers")
-    .select("amount_due")
-    .lte("created_at", endOfDay);
+    .select("customer_name, amount_due, last_payment, created_at")
+    .gt("amount_due", 0);
 
   if (error) {
     console.error(error);
@@ -214,11 +219,15 @@ async function loadCreditSummary(dateStr) {
     return;
   }
 
-  const total = (data ?? []).reduce(
-    (sum, row) => sum + Number(row.amount_due ?? 0),
-    0
-  );
+  const filtered = (data ?? []).filter((row) => {
+    const last = row.last_payment ? new Date(`${row.last_payment}T00:00:00Z`) : null;
+    const created = row.created_at ? new Date(row.created_at) : null;
+    const effective = last || created;
+    if (!effective) return false;
+    return effective.getTime() <= endOfDay;
+  });
 
+  const total = filtered.reduce((sum, row) => sum + Number(row.amount_due ?? 0), 0);
   if (creditTotal) creditTotal.textContent = formatCurrency(total);
 }
 
@@ -537,6 +546,14 @@ function formatQuantity(value) {
     maximumFractionDigits: 2,
   });
 }
+
+// Listen for credit updates from other pages/tabs and refresh credit summary
+window.addEventListener("storage", (e) => {
+  if (e.key !== "credit-updated") return;
+  const dateInput = document.getElementById("snapshot-date");
+  const date = dateInput?.value || new Date().toISOString().slice(0, 10);
+  loadCreditSummary(date);
+});
 
 function sumByProduct(rows, product, valueFn) {
   return (rows ?? []).reduce((sum, row) => {
