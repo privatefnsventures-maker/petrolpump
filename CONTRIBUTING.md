@@ -14,5 +14,5 @@ Click the **Fork** button at the top right of this page to create your own copy.
 
 ### 2. Clone Your Fork
 ```bash
-git clone https://github.com/your-username/your-repo-name.git
-cd your-repo-name
+git clone https://github.com/privatefnsventures-maker/petrolpump.git
+cd petrol-pump-app
