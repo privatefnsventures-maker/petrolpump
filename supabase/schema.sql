@@ -208,3 +208,11 @@ create policy "credit_insert_authenticated" on public.credit_customers
   for insert
   to authenticated
   with check (true);
+
+-- Allow authenticated users to update credit records (needed for settlements)
+drop policy if exists "credit_update_authenticated" on public.credit_customers;
+create policy "credit_update_authenticated" on public.credit_customers
+  for update
+  to authenticated
+  using (true)
+  with check (true);
