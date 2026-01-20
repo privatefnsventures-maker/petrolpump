@@ -23,7 +23,7 @@ function resolveLanding(role) {
   return LANDING_BY_ROLE[role] ?? LANDING_BY_ROLE[DEFAULT_ROLE];
 }
 
-function hideCurrentNavLink() {
+function markCurrentNavLink() {
   const path = window.location.pathname;
   let current = path.split("/").pop() || "";
   if (!current || current === "index.html") {
@@ -33,7 +33,8 @@ function hideCurrentNavLink() {
   document.querySelectorAll("header.topbar nav a").forEach((link) => {
     const href = link.getAttribute("href");
     if (href === current) {
-      link.remove();
+      link.classList.add("nav-active");
+      link.setAttribute("aria-current", "page");
     }
   });
 }
@@ -97,7 +98,7 @@ if (logoutButton) {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-  hideCurrentNavLink();
+  markCurrentNavLink();
 });
 
 /**
