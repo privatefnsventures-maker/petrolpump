@@ -344,6 +344,21 @@
             </div>
           </div>
 
+          <div style="display: grid; grid-template-columns: 1fr; gap: 1rem;">
+            <div>
+              <label for="petrol-rate">Petrol Rate (₹/L)</label>
+              <input
+                id="petrol-rate"
+                name="petrol_rate"
+                type="number"
+                inputmode="decimal"
+                step="0.01"
+                min="0"
+                placeholder="0.00"
+              />
+            </div>
+          </div>
+
           <div class="sheet-remarks">
             <label for="petrol-reading-remarks">Remarks</label>
             <textarea
@@ -376,12 +391,13 @@
                   <th>Testing (L)</th>
                   <th>Dip reading (mm)</th>
                   <th>Stock (L)</th>
+                  <th>Rate (₹/L)</th>
                   <th>Remarks</th>
                 </tr>
               </thead>
               <tbody id="dsr-table-petrol">
                 <tr>
-                  <td colspan="8" class="muted">Loading…</td>
+                  <td colspan="9" class="muted">Loading…</td>
                 </tr>
               </tbody>
             </table>
@@ -708,6 +724,21 @@
             </div>
           </div>
 
+          <div style="display: grid; grid-template-columns: 1fr; gap: 1rem;">
+            <div>
+              <label for="diesel-rate">Diesel Rate (₹/L)</label>
+              <input
+                id="diesel-rate"
+                name="diesel_rate"
+                type="number"
+                inputmode="decimal"
+                step="0.01"
+                min="0"
+                placeholder="0.00"
+              />
+            </div>
+          </div>
+
           <div class="sheet-remarks">
             <label for="diesel-reading-remarks">Remarks</label>
             <textarea
@@ -740,12 +771,13 @@
                   <th>Testing (L)</th>
                   <th>Dip reading (mm)</th>
                   <th>Stock (L)</th>
+              <th>Rate (₹/L)</th>
               <th>Remarks</th>
             </tr>
           </thead>
               <tbody id="dsr-table-diesel">
                 <tr>
-                  <td colspan="8" class="muted">Loading…</td>
+                  <td colspan="9" class="muted">Loading…</td>
                 </tr>
               </tbody>
             </table>
