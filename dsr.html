@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Daily Sales Report · Petrol Pump</title>
+    <link rel="stylesheet" href="css/style.css" />
+    <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script defer src="js/env.js"></script>
+    <script defer src="js/supabase.js"></script>
+    <script defer src="js/auth.js?v=2"></script>
+    <script defer src="js/dsr.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>Daily Sales Report</h1>
+      <nav>
+        <a href="dashboard.html">Dashboard</a>
+        <a href="dsr.html">Daily Sales Report</a>
+        <a href="credit.html">Credit Ledger</a>
+        <a href="expenses.html">Expenses</a>
+        <a href="attendance.html">Attendance</a>
+        <a href="analysis.html" data-role="admin-only">Analysis</a>
+        <a href="settings.html" data-role="admin-only">Settings</a>
+        <button id="logout-button" class="link">Logout</button>
+      </nav>
+    </header>
+
+    <main class="stack">
+      <section class="card dsr-card" data-product="petrol">
+        <div class="dsr-card-head">
+          <div>
+            <h2>Petrol · Daily Meter Readings</h2>
+            <p class="muted">
+              Fill the reading sheet exactly like the physical DSR register.
+            </p>
+          </div>
+        </div>
+        <form id="dsr-form-petrol" class="sheet-form" autocomplete="off">
+          <div class="meter-stack">
+            <div class="meter-block">
+              <h3 class="meter-title">Opening meter reading</h3>
+              <table class="dsr-table meter-table compact">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>P1 · N1</th>
+                    <th>P1 · N2</th>
+                    <th>P2 · N1</th>
+                    <th>P2 · N2</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>
+                      <input
+                        id="petrol-reading-date"
+                        name="date"
+                        type="date"
+                        required
+                      />
+                    </td>
+                    <td>
+                      <input
+                        id="petrol-opening-p1n1"
+                        name="opening_pump1_nozzle1"
+                        type="text"
+                        inputmode="numeric"
+                        pattern="[0-9]*"
+                        maxlength="15"
+                        placeholder="0"
+                        required
+                        class="meter-reading"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        id="petrol-opening-p1n2"
+                        name="opening_pump1_nozzle2"
+                        type="text"
+                        inputmode="numeric"
+                        pattern="[0-9]*"
+                        maxlength="15"
+                        placeholder="0"
+                        required
+                        class="meter-reading"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        id="petrol-opening-p2n1"
+                        name="opening_pump2_nozzle1"
+                        type="text"
+                        inputmode="numeric"
+                        pattern="[0-9]*"
+                        maxlength="15"
+                        placeholder="0"
+                        required
+                        class="meter-reading"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        id="petrol-opening-p2n2"
+                        name="opening_pump2_nozzle2"
+                        type="text"
+                        inputmode="numeric"
+                        pattern="[0-9]*"
+                        maxlength="15"
+                        placeholder="0"
+                        required
+                        class="meter-reading"
+                      />
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="meter-block">
+              <h3 class="meter-title">Closing meter reading</h3>
+              <table class="dsr-table meter-table compact">
+                <thead>
+                  <tr>
+                    <th>P1 · N1</th>
+                    <th>P1 · N2</th>
+                    <th>P2 · N1</th>
+                    <th>P2 · N2</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>
+                      <input
+                        id="petrol-closing-p1n1"
+                        name="closing_pump1_nozzle1"
+                        type="text"
+                        inputmode="numeric"
+                        pattern="[0-9]*"
+                        maxlength="15"
+                        placeholder="0"
+                        required
+                        class="meter-reading"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        id="petrol-closing-p1n2"
+                        name="closing_pump1_nozzle2"
+                        type="text"
+                        inputmode="numeric"
+                        pattern="[0-9]*"
+                        maxlength="15"
+                        placeholder="0"
+                        required
+                        class="meter-reading"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        id="petrol-closing-p2n1"
+                        name="closing_pump2_nozzle1"
+                        type="text"
+                        inputmode="numeric"
+                        pattern="[0-9]*"
+                        maxlength="15"
+                        placeholder="0"
+                        required
+                        class="meter-reading"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        id="petrol-closing-p2n2"
+                        name="closing_pump2_nozzle2"
+                        type="text"
+                        inputmode="numeric"
+                        pattern="[0-9]*"
+                        maxlength="15"
+                        placeholder="0"
+                        required
+                        class="meter-reading"
+                      />
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="meter-block">
+              <h3 class="meter-title">Sales, testing & stock</h3>
+              <table class="dsr-table meter-table compact">
+                <thead>
+                  <tr>
+                    <th>Opening stock (L)</th>
+                    <th>Receipts (L)</th>
+                    <th>Total stock (L)</th>
+                    <th>Sales pump 1 (L)</th>
+                    <th>Sales pump 2 (L)</th>
+                    <th>Total sales (L)</th>
+                    <th>Testing (L)</th>
+                    <th>Net sale (L)</th>
+                    <th>Dip reading (mm)</th>
+                    <th>Dip stock (L)</th>
+                    <th>Variation (L)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>
+                      <input
+                        id="petrol-opening-stock-inline"
+                        name="opening_stock"
+                        type="number"
+                        inputmode="decimal"
+                        step="0.01"
+                        min="0"
+                        placeholder="0"
+                        required
+                      />
+                    </td>
+                    <td>
+                      <input
+                        id="petrol-receipts-inline"
+                        name="receipts"
+                        type="number"
+                        inputmode="decimal"
+                        step="0.01"
+                        min="0"
+                        placeholder="0"
+                        required
+                      />
+                    </td>
+                    <td>
+                      <input
+                        id="petrol-total-stock-inline"
+                        name="total_stock"
+                        type="number"
+                        inputmode="decimal"
+                        step="0.01"
+                        placeholder="0"
+                        readonly
+                        class="calc-field"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        id="petrol-sales-p1"
+                        name="sales_pump1"
+                        type="number"
+                        inputmode="decimal"
+                        step="0.01"
+                        placeholder="0"
+                        readonly
+                        class="calc-field"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        id="petrol-sales-p2"
+                        name="sales_pump2"
+                        type="number"
+                        inputmode="decimal"
+                        step="0.01"
+                        placeholder="0"
+                        readonly
+                        class="calc-field"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        id="petrol-total-sales"
+                        name="total_sales"
+                        type="number"
+                        inputmode="decimal"
+                        step="0.01"
+                        placeholder="0"
+                        readonly
+                        class="calc-field"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        id="petrol-testing"
+                        name="testing"
+                        type="number"
+                        inputmode="decimal"
+                        step="0.01"
+                        min="0"
+                        placeholder="0"
+                        required
+                      />
+                    </td>
+                    <td>
+                      <input
+                        id="petrol-net-sale"
+                        name="net_sale"
+                        type="number"
+                        inputmode="decimal"
+                        step="0.01"
+                        placeholder="0"
+                        readonly
+                        class="calc-field"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        id="petrol-dip-reading"
+                        name="dip_reading"
+                        type="number"
+                        inputmode="decimal"
+                        step="0.01"
+                        min="0"
+                        placeholder="0"
+                        required
+                      />
+                    </td>
+                    <td>
+                      <input
+                        id="petrol-stock"
+                        name="stock"
+                        type="number"
+                        inputmode="decimal"
+                        step="0.01"
+                        min="0"
+                        placeholder="0"
+                        required
+                      />
+                    </td>
+                    <td>
+                      <input
+                        id="petrol-variation"
+                        name="variation"
+                        type="number"
+                        inputmode="decimal"
+                        step="0.01"
+                        placeholder="0"
+                        readonly
+                        class="calc-field"
+                      />
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr; gap: 1rem;">
+            <div>
+              <label for="petrol-rate">Petrol Rate (₹/L)</label>
+              <input
+                id="petrol-rate"
+                name="petrol_rate"
+                type="number"
+                inputmode="decimal"
+                step="0.01"
+                min="0"
+                placeholder="0.00"
+              />
+            </div>
+          </div>
+
+          <div class="sheet-remarks">
+            <label for="petrol-reading-remarks">Remarks</label>
+            <textarea
+              id="petrol-reading-remarks"
+              name="remarks"
+              rows="2"
+              placeholder="Optional notes"
+            ></textarea>
+          </div>
+
+          <div class="sheet-actions">
+            <button type="submit">Save meter entry</button>
+            <p id="dsr-success-petrol" class="success hidden">
+              Entry saved successfully.
+            </p>
+            <p id="dsr-error-petrol" class="error hidden"></p>
+          </div>
+        </form>
+
+        <div class="dsr-history">
+          <h3>Recent meter entries</h3>
+          <div class="table-scroll">
+            <table class="dsr-table meter-history">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Pump 1 sale (L)</th>
+                  <th>Pump 2 sale (L)</th>
+                  <th>Total sales (L)</th>
+                  <th>Testing (L)</th>
+                  <th>Dip reading (mm)</th>
+                  <th>Stock (L)</th>
+                  <th>Rate (₹/L)</th>
+                  <th>Remarks</th>
+                </tr>
+              </thead>
+              <tbody id="dsr-table-petrol">
+                <tr>
+                  <td colspan="9" class="muted">Loading…</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+
+      <section class="card dsr-card" data-product="diesel">
+        <div class="dsr-card-head">
+          <div>
+            <h2>Diesel · Daily Meter Readings</h2>
+            <p class="muted">
+              Use the same structure for diesel nozzles and testing.
+            </p>
+          </div>
+        </div>
+        <form id="dsr-form-diesel" class="sheet-form" autocomplete="off">
+          <div class="meter-stack">
+            <div class="meter-block">
+              <h3 class="meter-title">Opening meter reading</h3>
+              <table class="dsr-table meter-table compact">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>P1 · N1</th>
+                    <th>P1 · N2</th>
+                    <th>P2 · N1</th>
+                    <th>P2 · N2</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>
+                      <input
+                        id="diesel-reading-date"
+                        name="date"
+                        type="date"
+                        required
+                      />
+                    </td>
+                    <td>
+                      <input
+                        id="diesel-opening-p1n1"
+                        name="opening_pump1_nozzle1"
+                        type="text"
+                        inputmode="numeric"
+                        pattern="[0-9]*"
+                        maxlength="15"
+                        placeholder="0"
+                        required
+                        class="meter-reading"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        id="diesel-opening-p1n2"
+                        name="opening_pump1_nozzle2"
+                        type="text"
+                        inputmode="numeric"
+                        pattern="[0-9]*"
+                        maxlength="15"
+                        placeholder="0"
+                        required
+                        class="meter-reading"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        id="diesel-opening-p2n1"
+                        name="opening_pump2_nozzle1"
+                        type="text"
+                        inputmode="numeric"
+                        pattern="[0-9]*"
+                        maxlength="15"
+                        placeholder="0"
+                        required
+                        class="meter-reading"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        id="diesel-opening-p2n2"
+                        name="opening_pump2_nozzle2"
+                        type="text"
+                        inputmode="numeric"
+                        pattern="[0-9]*"
+                        maxlength="15"
+                        placeholder="0"
+                        required
+                        class="meter-reading"
+                      />
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="meter-block">
+              <h3 class="meter-title">Closing meter reading</h3>
+              <table class="dsr-table meter-table compact">
+                <thead>
+                  <tr>
+                    <th>P1 · N1</th>
+                    <th>P1 · N2</th>
+                    <th>P2 · N1</th>
+                    <th>P2 · N2</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>
+                      <input
+                        id="diesel-closing-p1n1"
+                        name="closing_pump1_nozzle1"
+                        type="text"
+                        inputmode="numeric"
+                        pattern="[0-9]*"
+                        maxlength="15"
+                        placeholder="0"
+                        required
+                        class="meter-reading"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        id="diesel-closing-p1n2"
+                        name="closing_pump1_nozzle2"
+                        type="text"
+                        inputmode="numeric"
+                        pattern="[0-9]*"
+                        maxlength="15"
+                        placeholder="0"
+                        required
+                        class="meter-reading"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        id="diesel-closing-p2n1"
+                        name="closing_pump2_nozzle1"
+                        type="text"
+                        inputmode="numeric"
+                        pattern="[0-9]*"
+                        maxlength="15"
+                        placeholder="0"
+                        required
+                        class="meter-reading"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        id="diesel-closing-p2n2"
+                        name="closing_pump2_nozzle2"
+                        type="text"
+                        inputmode="numeric"
+                        pattern="[0-9]*"
+                        maxlength="15"
+                        placeholder="0"
+                        required
+                        class="meter-reading"
+                      />
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="meter-block">
+              <h3 class="meter-title">Sales, testing & stock</h3>
+              <table class="dsr-table meter-table compact">
+                <thead>
+                  <tr>
+                    <th>Opening stock (L)</th>
+                    <th>Receipts (L)</th>
+                    <th>Total stock (L)</th>
+                    <th>Sales pump 1 (L)</th>
+                    <th>Sales pump 2 (L)</th>
+                    <th>Total sales (L)</th>
+                    <th>Testing (L)</th>
+                    <th>Net sale (L)</th>
+                    <th>Dip reading (mm)</th>
+                    <th>Dip stock (L)</th>
+                    <th>Variation (L)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>
+                      <input
+                        id="diesel-opening-stock-inline"
+                        name="opening_stock"
+                        type="number"
+                        inputmode="decimal"
+                        step="0.01"
+                        min="0"
+                        placeholder="0"
+                        required
+                      />
+                    </td>
+                    <td>
+                      <input
+                        id="diesel-receipts-inline"
+                        name="receipts"
+                        type="number"
+                        inputmode="decimal"
+                        step="0.01"
+                        min="0"
+                        placeholder="0"
+                        required
+                      />
+                    </td>
+                    <td>
+                      <input
+                        id="diesel-total-stock-inline"
+                        name="total_stock"
+                        type="number"
+                        inputmode="decimal"
+                        step="0.01"
+                        placeholder="0"
+                        readonly
+                        class="calc-field"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        id="diesel-sales-p1"
+                        name="sales_pump1"
+                        type="number"
+                        inputmode="decimal"
+                        step="0.01"
+                        placeholder="0"
+                        readonly
+                        class="calc-field"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        id="diesel-sales-p2"
+                        name="sales_pump2"
+                        type="number"
+                        inputmode="decimal"
+                        step="0.01"
+                        placeholder="0"
+                        readonly
+                        class="calc-field"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        id="diesel-total-sales"
+                        name="total_sales"
+                        type="number"
+                        inputmode="decimal"
+                        step="0.01"
+                        placeholder="0"
+                        readonly
+                        class="calc-field"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        id="diesel-testing"
+                        name="testing"
+                        type="number"
+                        inputmode="decimal"
+                        step="0.01"
+                        min="0"
+                        placeholder="0"
+                        required
+                      />
+                    </td>
+                    <td>
+                      <input
+                        id="diesel-net-sale"
+                        name="net_sale"
+                        type="number"
+                        inputmode="decimal"
+                        step="0.01"
+                        placeholder="0"
+                        readonly
+                        class="calc-field"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        id="diesel-dip-reading"
+                        name="dip_reading"
+                        type="number"
+                        inputmode="decimal"
+                        step="0.01"
+                        min="0"
+                        placeholder="0"
+                        required
+                      />
+                    </td>
+                    <td>
+                      <input
+                        id="diesel-stock"
+                        name="stock"
+                        type="number"
+                        inputmode="decimal"
+                        step="0.01"
+                        min="0"
+                        placeholder="0"
+                        required
+                      />
+                    </td>
+                    <td>
+                      <input
+                        id="diesel-variation"
+                        name="variation"
+                        type="number"
+                        inputmode="decimal"
+                        step="0.01"
+                        placeholder="0"
+                        readonly
+                        class="calc-field"
+                      />
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr; gap: 1rem;">
+            <div>
+              <label for="diesel-rate">Diesel Rate (₹/L)</label>
+              <input
+                id="diesel-rate"
+                name="diesel_rate"
+                type="number"
+                inputmode="decimal"
+                step="0.01"
+                min="0"
+                placeholder="0.00"
+              />
+            </div>
+          </div>
+
+          <div class="sheet-remarks">
+            <label for="diesel-reading-remarks">Remarks</label>
+            <textarea
+              id="diesel-reading-remarks"
+              name="remarks"
+              rows="2"
+              placeholder="Optional notes"
+            ></textarea>
+          </div>
+
+          <div class="sheet-actions">
+            <button type="submit">Save meter entry</button>
+            <p id="dsr-success-diesel" class="success hidden">
+              Entry saved successfully.
+            </p>
+            <p id="dsr-error-diesel" class="error hidden"></p>
+          </div>
+        </form>
+
+        <div class="dsr-history">
+          <h3>Recent meter entries</h3>
+          <div class="table-scroll">
+            <table class="dsr-table meter-history">
+          <thead>
+            <tr>
+              <th>Date</th>
+                  <th>Pump 1 sale (L)</th>
+                  <th>Pump 2 sale (L)</th>
+                  <th>Total sales (L)</th>
+                  <th>Testing (L)</th>
+                  <th>Dip reading (mm)</th>
+                  <th>Stock (L)</th>
+              <th>Rate (₹/L)</th>
+              <th>Remarks</th>
+            </tr>
+          </thead>
+              <tbody id="dsr-table-diesel">
+                <tr>
+                  <td colspan="9" class="muted">Loading…</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </body>
+</html>

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Open Credit · Petrol Pump</title>
+    <link rel="stylesheet" href="css/style.css" />
+    <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script defer src="js/env.js"></script>
+    <script defer src="js/supabase.js"></script>
+    <script defer src="js/auth.js?v=2"></script>
+    <script defer src="js/credit-overdue.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>Open Credit</h1>
+      <nav>
+        <a href="dashboard.html">Dashboard</a>
+        <a href="dsr.html">Daily Sales Report</a>
+        <a href="credit.html">Credit Ledger</a>
+        <a href="expenses.html">Expenses</a>
+        <a href="attendance.html">Attendance</a>
+        <a href="analysis.html" data-role="admin-only">Analysis</a>
+        <a href="settings.html" data-role="admin-only">Settings</a>
+        <button id="logout-button" class="link">Logout</button>
+      </nav>
+    </header>
+
+    <main class="stack">
+      <section class="card">
+        <div class="card-head">
+          <div>
+            <h2>Customers with unpaid credit</h2>
+            <p id="credit-overdue-summary" class="muted">Loading…</p>
+          </div>
+          <div class="form-field">
+            <label for="credit-overdue-date">As of date</label>
+            <input id="credit-overdue-date" type="date" />
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Outstanding list</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Customer</th>
+              <th>Vehicle</th>
+              <th>Amount due (₹)</th>
+              <th>Last payment</th>
+              <th>Created</th>
+            </tr>
+          </thead>
+          <tbody id="credit-overdue-body">
+            <tr>
+              <td colspan="5" class="muted">Loading…</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </main>
+  </body>
+</html>

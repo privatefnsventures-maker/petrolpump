@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Expenses · Petrol Pump</title>
+    <link rel="stylesheet" href="css/style.css" />
+    <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script defer src="js/env.js"></script>
+    <script defer src="js/supabase.js"></script>
+    <script defer src="js/auth.js?v=2"></script>
+    <script defer src="js/expenses.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>Expenses</h1>
+      <nav>
+        <a href="dashboard.html">Dashboard</a>
+        <a href="dsr.html">Daily Sales Report</a>
+        <a href="credit.html">Credit Ledger</a>
+        <a href="expenses.html">Expenses</a>
+        <a href="attendance.html">Attendance</a>
+        <a href="analysis.html" data-role="admin-only">Analysis</a>
+        <a href="settings.html" data-role="admin-only">Settings</a>
+        <button id="logout-button" class="link">Logout</button>
+      </nav>
+    </header>
+
+    <main class="stack">
+      <section class="card">
+        <h2>Record expense</h2>
+        <form id="expense-form" class="form" autocomplete="off">
+          <div class="form-grid">
+            <div class="form-field">
+              <label for="expense-date">Date</label>
+              <input id="expense-date" name="date" type="date" required />
+            </div>
+
+            <div class="form-field">
+              <label for="expense-category">Category</label>
+              <select id="expense-category" name="category">
+                <option value="">Select category</option>
+                <option value="mstest">mstest</option>
+                <option value="hsdtest">hsdtest</option>
+                <option value="miscellanious">miscellanious</option>
+                <option value="staff_food">staff_food</option>
+              </select>
+            </div>
+
+            <div class="form-field">
+              <label for="expense-amount">Amount (₹)</label>
+              <input
+                id="expense-amount"
+                name="amount"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0"
+                required
+              />
+            </div>
+
+            <div class="form-field">
+              <label for="expense-description">Description</label>
+              <textarea
+                id="expense-description"
+                name="description"
+                rows="2"
+                placeholder="Optional note"
+              ></textarea>
+            </div>
+          </div>
+
+          <button type="submit">Save expense</button>
+          <p id="expense-success" class="success hidden">Expense saved.</p>
+          <p id="expense-error" class="error hidden"></p>
+        </form>
+      </section>
+
+      <section class="card">
+        <h2>Recent expenses</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Category</th>
+              <th>Description</th>
+              <th>Amount (₹)</th>
+            </tr>
+          </thead>
+          <tbody id="expense-table-body">
+            <tr>
+              <td colspan="4" class="muted">Loading…</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </main>
+  </body>
+</html>

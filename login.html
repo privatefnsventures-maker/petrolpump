@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bishnupriya Fuels · Login</title>
+    <link rel="stylesheet" href="css/style.css" />
+    <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script defer src="js/env.js"></script>
+    <script defer src="js/supabase.js"></script>
+    <script defer src="js/auth.js?v=2"></script>
+  </head>
+  <body class="login-page">
+    <main class="card">
+      <h1>Operator Login</h1>
+      <p class="muted">Sign in to manage daily operations and reports.</p>
+
+      <form id="login-form" class="form" autocomplete="on">
+        <label for="email">Email</label>
+        <input
+          id="email"
+          name="email"
+          type="email"
+          placeholder="operator@fnsventures.in"
+          required
+        />
+
+        <label for="password">Password</label>
+        <input
+          id="password"
+          name="password"
+          type="password"
+          placeholder="Enter password"
+          minlength="6"
+          required
+        />
+
+        <button type="submit" id="login-button">Login</button>
+        <p id="login-error" class="error hidden"></p>
+      </form>
+    </main>
+  </body>
+</html>

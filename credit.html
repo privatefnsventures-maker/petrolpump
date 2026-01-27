@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Credit Ledger · Petrol Pump</title>
+    <link rel="stylesheet" href="css/style.css" />
+    <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script defer src="js/env.js"></script>
+    <script defer src="js/supabase.js"></script>
+    <script defer src="js/auth.js?v=2"></script>
+    <script defer src="js/credit.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>Credit Customers</h1>
+      <nav>
+        <a href="dashboard.html">Dashboard</a>
+        <a href="dsr.html">Daily Sales Report</a>
+        <a href="credit.html">Credit Ledger</a>
+        <a href="expenses.html">Expenses</a>
+        <a href="attendance.html">Attendance</a>
+        <a href="analysis.html" data-role="admin-only">Analysis</a>
+        <a href="settings.html" data-role="admin-only">Settings</a>
+        <button id="logout-button" class="link">Logout</button>
+      </nav>
+    </header>
+
+    <main class="stack">
+      <section class="card">
+        <h2>Record credit sale</h2>
+        <form id="credit-form" class="form">
+          <div class="form-grid">
+            <div class="form-field">
+              <label for="customer">Customer name</label>
+              <input
+                id="customer"
+                name="customer_name"
+                type="text"
+                placeholder="Fleet owner"
+                maxlength="120"
+                required
+              />
+            </div>
+
+            <div class="form-field">
+              <label for="vehicle">Vehicle no.</label>
+              <input
+                id="vehicle"
+                name="vehicle_no"
+                type="text"
+                placeholder="WB12AB3456"
+                maxlength="32"
+              />
+            </div>
+
+            <div class="form-field">
+              <label for="amount">Amount due (₹)</label>
+              <input
+                id="amount"
+                name="amount_due"
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="0"
+                required
+              />
+            </div>
+
+            <div class="form-field">
+              <label for="last-payment-date">Last payment date</label>
+              <input
+                id="last-payment-date"
+                name="last_payment"
+                type="date"
+              />
+            </div>
+
+            <div class="form-field">
+              <label for="notes">Notes</label>
+              <textarea
+                id="notes"
+                name="notes"
+                rows="2"
+                placeholder="Fuel type, credit terms, etc."
+              ></textarea>
+            </div>
+          </div>
+
+          <button type="submit">Save credit entry</button>
+          <p id="credit-success" class="success hidden">Credit entry saved.</p>
+          <p id="credit-error" class="error hidden"></p>
+        </form>
+      </section>
+
+      <section class="card">
+        <h2>Outstanding balances</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Customer</th>
+              <th>Vehicle</th>
+              <th>Amount due (₹)</th>
+              <th>Last payment</th>
+              <th>Notes</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="credit-table-body">
+            <tr>
+              <td colspan="6" class="muted">Loading…</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </main>
+  </body>
+</html>
