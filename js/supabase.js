@@ -1,8 +1,13 @@
 /* global supabase */
 
+const runtimeConfig = window.__APP_CONFIG__ || {};
+
 // Update these with your Supabase project details.
-const SUPABASE_URL = "https://lbpweydzbydndbayhstk.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_U-_hFv3Qwq_E30-lxCrb7Q_wC8c8c6H";
+const SUPABASE_URL =
+  runtimeConfig.SUPABASE_URL || "https://lbpweydzbydndbayhstk.supabase.co";
+const SUPABASE_ANON_KEY =
+  runtimeConfig.SUPABASE_ANON_KEY ||
+  "sb_publishable_U-_hFv3Qwq_E30-lxCrb7Q_wC8c8c6H";
 
 if (!SUPABASE_URL || SUPABASE_URL.includes("YOUR-PROJECT-ID")) {
   console.warn(

@@ -48,8 +48,34 @@ petrol-pump-app/
    - Review comments in the file to adjust limits, indexes, or cascading rules if needed.
 
 4. **Environment Variables**  
-   - Update `js/supabase.js` with your Supabase project credentials.  
+   - Update `js/env.js` with your Supabase project credentials.  
    - When publishing to GitHub Pages, these values become part of the static bundle; rotate keys if leaked and consider IP restrictions in Supabase.
+
+---
+
+### 2.1 Staging + Production Environments (GitHub Actions)
+
+This repo supports two environments:
+
+- **prod** → `main` branch (root site)
+- **staging** → `staging` branch (`/staging/` path)
+
+**How it works**
+
+- `js/env.js` is generated during the GitHub Actions deploy step using environment secrets.
+- `js/supabase.js` reads from `window.__APP_CONFIG__` so each environment uses a different Supabase project.
+
+**Required GitHub Environment Secrets**
+
+Create two environments in GitHub: `prod` and `staging`, each with:
+
+- `SUPABASE_URL`
+- `SUPABASE_ANON_KEY`
+
+**URLs**
+
+- Prod: `https://<username>.github.io/petrolpump/`
+- Staging: `https://<username>.github.io/petrolpump/staging/`
 
 ---
 
