@@ -31,35 +31,44 @@
         <h2>Record expense</h2>
         <form id="expense-form" class="form" autocomplete="off">
           <div class="form-grid">
-            <label for="expense-date">Date</label>
-            <input id="expense-date" name="date" type="date" required />
+            <div class="form-field">
+              <label for="expense-date">Date</label>
+              <input id="expense-date" name="date" type="date" required />
+            </div>
 
-            <label for="expense-category">Category</label>
-            <input
-              id="expense-category"
-              name="category"
-              type="text"
-              placeholder="Electricity, wages, repairs"
-            />
+            <div class="form-field">
+              <label for="expense-category">Category</label>
+              <select id="expense-category" name="category">
+                <option value="">Select category</option>
+                <option value="mstest">mstest</option>
+                <option value="hsdtest">hsdtest</option>
+                <option value="miscellanious">miscellanious</option>
+                <option value="staff_food">staff_food</option>
+              </select>
+            </div>
 
-            <label for="expense-amount">Amount (₹)</label>
-            <input
-              id="expense-amount"
-              name="amount"
-              type="number"
-              min="0"
-              step="0.01"
-              placeholder="0"
-              required
-            />
+            <div class="form-field">
+              <label for="expense-amount">Amount (₹)</label>
+              <input
+                id="expense-amount"
+                name="amount"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0"
+                required
+              />
+            </div>
 
-            <label for="expense-description">Description</label>
-            <textarea
-              id="expense-description"
-              name="description"
-              rows="2"
-              placeholder="Optional note"
-            ></textarea>
+            <div class="form-field">
+              <label for="expense-description">Description</label>
+              <textarea
+                id="expense-description"
+                name="description"
+                rows="2"
+                placeholder="Optional note"
+              ></textarea>
+            </div>
           </div>
 
           <button type="submit">Save expense</button>

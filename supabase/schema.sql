@@ -21,6 +21,8 @@ create table if not exists public.dsr (
   testing numeric(14,2) not null default 0,
   dip_reading numeric(14,2) not null default 0,
   stock numeric(14,2) not null default 0,
+  petrol_rate numeric(10,2),
+  diesel_rate numeric(10,2),
   remarks text,
   created_by uuid references auth.users (id) on delete set null,
   created_at timestamp with time zone default timezone('utc'::text, now())
@@ -207,4 +209,12 @@ drop policy if exists "credit_insert_authenticated" on public.credit_customers;
 create policy "credit_insert_authenticated" on public.credit_customers
   for insert
   to authenticated
+  with check (true);
+
+-- Allow authenticated users to update credit records (needed for settlements)
+drop policy if exists "credit_update_authenticated" on public.credit_customers;
+create policy "credit_update_authenticated" on public.credit_customers
+  for update
+  to authenticated
+  using (true)
   with check (true);

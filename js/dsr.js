@@ -85,6 +85,13 @@ function initReadingForm(product) {
       payload[field] = toNumber(formData.get(field));
     });
 
+    // Add the appropriate rate field based on product
+    if (product === "petrol" && formData.get("petrol_rate")) {
+      payload.petrol_rate = toNumber(formData.get("petrol_rate"));
+    } else if (product === "diesel" && formData.get("diesel_rate")) {
+      payload.diesel_rate = toNumber(formData.get("diesel_rate"));
+    }
+
     if (!payload.date) {
       if (errorEl) {
         errorEl.textContent = "Date is required.";
@@ -167,31 +174,32 @@ async function loadReadingHistory(product) {
   const tbody = document.getElementById(`dsr-table-${product}`);
   if (!tbody) return;
   tbody.innerHTML =
-    "<tr><td colspan='8' class='muted'>Loading recent readings…</td></tr>";
+    "<tr><td colspan='9' class='muted'>Loading recent readings…</td></tr>";
 
   const { data, error } = await supabaseClient
     .from("dsr")
     .select(
-      "date, sales_pump1, sales_pump2, total_sales, testing, dip_reading, stock, remarks"
+      "date, sales_pump1, sales_pump2, total_sales, testing, dip_reading, stock, petrol_rate, diesel_rate, remarks"
     )
     .eq("product", product)
     .order("date", { ascending: false })
     .limit(10);
 
   if (error) {
-    tbody.innerHTML = `<tr><td colspan='8' class='error'>${error.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan='9' class='error'>${error.message}</td></tr>`;
     return;
   }
 
   if (!data?.length) {
     tbody.innerHTML =
-      "<tr><td colspan='8' class='muted'>No readings saved yet.</td></tr>";
+      "<tr><td colspan='9' class='muted'>No readings saved yet.</td></tr>";
     return;
   }
 
   tbody.innerHTML = "";
   data.forEach((row) => {
     const tr = document.createElement("tr");
+    const rate = product === "petrol" ? row.petrol_rate : row.diesel_rate;
     tr.innerHTML = `
       <td>${row.date}</td>
       <td>${formatQuantity(row.sales_pump1)}</td>
@@ -200,6 +208,7 @@ async function loadReadingHistory(product) {
       <td>${formatQuantity(row.testing)}</td>
       <td>${formatQuantity(row.dip_reading)}</td>
       <td>${formatQuantity(row.stock)}</td>
+      <td>${rate ? formatCurrency(rate) : "—"}</td>
       <td>${row.remarks ?? "—"}</td>
     `;
     tbody.appendChild(tr);
@@ -314,6 +323,15 @@ function formatQuantity(value) {
   if (Number.isNaN(Number(value))) return "—";
   return Number(value).toLocaleString("en-IN", {
     minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
+}
+
+function formatCurrency(value) {
+  if (value === null || value === undefined) return "—";
+  if (Number.isNaN(Number(value))) return "—";
+  return "₹" + Number(value).toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
 }
