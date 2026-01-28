@@ -1,0 +1,303 @@
+/* App shell: dashboard, DSR, credit, expenses, attendance, analysis, settings */
+
+tbody tr:hover {
+  background: #f8fafc;
+}
+
+/* Settle and delete inline actions */
+.settle-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.settle-inline .settle-amount {
+  width: 80px;
+}
+
+.settle-inline .settle-confirm {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.85rem;
+}
+
+.settle-inline .delete-entry {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.85rem;
+  background: #dc2626;
+  color: #fff;
+}
+
+.settle-inline .delete-entry:hover {
+  background: #b91c1c;
+}
+
+.settle-inline .settle-msg {
+  font-size: 0.85rem;
+}
+
+/* Pagination controls */
+.pagination-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.pagination-info {
+  font-size: 0.9rem;
+}
+
+.pagination-controls button {
+  padding: 0.5rem 1.25rem;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 480px) {
+  .pagination-controls {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+  }
+
+  .pagination-controls button {
+    width: 100%;
+  }
+}
+
+/* DSR layout */
+.dsr-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.dsr-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.dsr-card-head h2 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.dsr-card-head p {
+  margin: 0.35rem 0 0;
+  max-width: 32rem;
+}
+
+.sheet-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.table-scroll {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.dsr-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 960px;
+}
+
+.dsr-table th,
+.dsr-table td {
+  border: 1px solid #e2e8f0;
+  padding: 0.65rem 0.55rem;
+  text-align: center;
+  font-size: 0.85rem;
+  background: #fff;
+}
+
+.dsr-table thead th {
+  background: #f1f5f9;
+  color: #1f2933;
+  font-weight: 600;
+}
+
+.dsr-table thead tr:first-child th {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.dsr-table thead tr:nth-child(2) th {
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.dsr-table input {
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 6px;
+}
+
+.dsr-table input[type="date"] {
+  min-width: 140px;
+}
+
+.dsr-table input[type="number"] {
+  text-align: right;
+}
+
+.dsr-table input[type="text"] {
+  text-align: right;
+}
+
+.dsr-table .meter-reading {
+  font-variant-numeric: tabular-nums;
+}
+
+.dsr-table .calc-field[readonly] {
+  background: #f8fafc;
+  color: #475569;
+}
+
+.meter-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.meter-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.meter-title {
+  margin: 0;
+  font-size: 1rem;
+  color: #1f2933;
+}
+
+.sheet-remarks label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+}
+
+.sheet-remarks textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+.sheet-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+}
+
+.sheet-actions button {
+  flex-shrink: 0;
+}
+
+.sheet-actions p {
+  margin: 0;
+}
+
+.dsr-history h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.dsr-history .table-scroll {
+  margin-top: 0.75rem;
+}
+
+.meter-table,
+.meter-history {
+  min-width: 0;
+}
+
+.meter-table {
+  table-layout: fixed;
+}
+
+.meter-table th,
+.meter-table td {
+  padding: 0.45rem 0.35rem;
+  font-size: 0.72rem;
+}
+
+.meter-table.compact input {
+  width: 15ch;
+  max-width: 100%;
+}
+
+.meter-table.compact input[type="date"] {
+  width: 100%;
+  min-width: 160px;
+}
+
+.meter-table input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.meter-table input[type="number"]::-webkit-outer-spin-button,
+.meter-table input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.stock-table,
+.stock-history {
+  min-width: 880px;
+}
+
+@media (max-width: 768px) {
+  .dsr-table {
+    min-width: 880px;
+  }
+
+  .dsr-table th,
+  .dsr-table td {
+    font-size: 0.78rem;
+    padding: 0.55rem 0.45rem;
+  }
+}
+
+/* Global error banner (centralized error handling) */
+.app-error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: #fef2f2;
+  color: #991b1b;
+  border-bottom: 1px solid #fecaca;
+  font-size: 0.9rem;
+}
+
+.app-error-banner.hidden {
+  display: none;
+}
+
+.app-error-banner-close {
+  flex-shrink: 0;
+  padding: 0.25rem 0.5rem;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.app-error-banner-close:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
