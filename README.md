@@ -96,6 +96,23 @@ Open:
 
 - `http://localhost:3000/`
 
+## Supervisor / operator login
+
+To log in as a **supervisor** (e.g. `fnsventures@gmail.com`):
+
+1. **Supabase Auth** – The user must exist in your Supabase project: **Authentication → Users**. Create the user there (or have them sign up) and set a password.
+2. **Staff table** – The user must have a row in the `staff` table with role `supervisor`. An admin can add them from **Settings** in the app, or run in the Supabase SQL editor:
+
+   ```sql
+   insert into public.staff (email, role)
+   values ('fnsventures@gmail.com', 'supervisor')
+   on conflict (email) do update set role = 'supervisor';
+   ```
+
+   Emails are stored in lowercase; the app matches login email case-insensitively.
+
+3. **Login** – Use the same email and password on the login page. Supervisors are redirected to the Credit Ledger after login.
+
 ## Long-Term Improvements
 
 Planned enhancements for scalability, offline use, and multi-site support:

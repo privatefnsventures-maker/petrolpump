@@ -301,3 +301,96 @@ tbody tr:hover {
 .app-error-banner-close:hover {
   background: rgba(0, 0, 0, 0.06);
 }
+
+/* Analysis page */
+.analysis-hero p {
+  margin: 0.35rem 0 0;
+}
+
+.analysis-section-title {
+  margin: 0 0 0.25rem;
+  font-size: 1.2rem;
+  color: #1f2933;
+}
+
+.analysis-section-desc {
+  margin: 0 0 0.75rem;
+  font-size: 0.9rem;
+}
+
+.analysis-kpi-grid {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.analysis-kpi-grid .stat-tile {
+  margin: 0;
+}
+
+.analysis-kpi-grid .stat-tile .stat {
+  font-size: 1.5rem;
+}
+
+.analysis-kpi-grid--primary {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.analysis-kpi-grid--secondary {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.85rem;
+}
+
+.analysis-kpi {
+  padding: 1rem;
+}
+
+.analysis-kpi--compact .stat-tile .stat,
+.analysis-kpi--compact .stat {
+  font-size: 1.2rem;
+}
+
+.analysis-kpi--compact h3 {
+  font-size: 0.9rem;
+  margin-bottom: 0.35rem;
+}
+
+.analysis-kpi--compact small {
+  font-size: 0.75rem;
+}
+
+.analysis-insights-card {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 1px solid #e2e8f0;
+}
+
+.analysis-insights-list {
+  margin: 0;
+  padding-left: 1.35rem;
+  line-height: 1.6;
+  font-size: 0.95rem;
+}
+
+.analysis-insights-list li {
+  margin-bottom: 0.4rem;
+}
+
+.analysis-insights-list li:last-child {
+  margin-bottom: 0;
+}
+
+.analysis-chart-row .chart-wrap--half {
+  margin-left: 0;
+}
+
+.chart-wrap {
+  margin-top: 1rem;
+  position: relative;
+  height: 280px;
+  width: 100%;
+}
+
+.chart-wrap--half {
+  max-width: 360px;
+  height: 260px;
+}
