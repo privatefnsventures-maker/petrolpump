@@ -137,6 +137,28 @@ main {
   margin-top: 1rem;
 }
 
+.tab-box {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid #cbd5f5;
+  background: #eef2ff;
+  color: #1e3a8a;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.pl-income {
+  margin-top: 1.25rem;
+}
+
+.pl-income-grid {
+  margin-top: 0.75rem;
+}
+
 .fuel-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -215,7 +237,17 @@ main {
 .metric-inline {
   display: flex;
   align-items: baseline;
-  gap: 1rem;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+}
+
+.metric-inline > * {
+  min-width: 0;
+}
+
+.metric-inline > div {
+  flex: 1 1 10rem;
+  overflow: hidden;
 }
 
 .metric-inline .stat {
@@ -233,7 +265,8 @@ main {
   border: 1px solid #e2e8f0;
 }
 
-.stat-tile h3 {
+.stat-tile h3,
+.stat-tile h4 {
   margin: 0;
   font-size: 1rem;
 }
@@ -267,6 +300,55 @@ main {
   font-size: 2.5rem;
   font-weight: 600;
   margin: 0.25rem 0;
+}
+
+/* --- Dashboard numbers: auto-fit inside tiles --- */
+/* Use container queries when supported; otherwise clamp() still helps on smaller screens. */
+.metric-box,
+.stat-tile {
+  container-type: inline-size;
+}
+
+.metric-box .stat,
+.stat-tile .stat {
+  white-space: nowrap;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+/* Fallback sizing (works even without container queries). */
+.metric-box .stat {
+  font-size: clamp(1.65rem, 5vw, 2.5rem);
+}
+
+.metric-box .stat.stat-sub {
+  font-size: clamp(1.15rem, 4vw, 1.6rem);
+}
+
+.stat-tile .stat {
+  font-size: clamp(1.5rem, 4.5vw, 2rem);
+}
+
+/* Container-aware scaling: shrink text when the tile is narrow. */
+@container (max-width: 260px) {
+  .metric-box .stat {
+    font-size: 1.9rem;
+  }
+  .metric-box .stat.stat-sub {
+    font-size: 1.35rem;
+  }
+}
+
+@container (max-width: 220px) {
+  .metric-box .stat {
+    font-size: 1.65rem;
+  }
+  .metric-box .stat.stat-sub {
+    font-size: 1.15rem;
+  }
 }
 
 .activity {
