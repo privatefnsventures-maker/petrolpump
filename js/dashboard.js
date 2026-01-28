@@ -481,6 +481,64 @@ async function loadRecentActivity() {
   });
 }
 
+/**
+ * Fetches dashboard data using Edge Function (single round-trip) with fallback
+ * to parallel client-side queries if the Edge Function is unavailable.
+ */
+async function fetchDashboardData(startDate, endDate) {
+  try {
+    // Attempt to use the Edge Function for a single round-trip
+    const { data, error } = await supabaseClient.functions.invoke(
+      "get-dashboard-data",
+      {
+        body: { startDate, endDate },
+      }
+    );
+
+    if (error) {
+      console.warn("Edge Function unavailable, falling back to parallel queries:", error.message);
+      throw error;
+    }
+
+    return {
+      dsrData: data.dsrData,
+      stockData: data.stockData,
+      expenseData: data.expenseData,
+      dsrError: data.errors?.dsr ? new Error(data.errors.dsr) : null,
+      stockError: data.errors?.stock ? new Error(data.errors.stock) : null,
+      expenseError: data.errors?.expense ? new Error(data.errors.expense) : null,
+    };
+  } catch {
+    // Fallback: use parallel client-side queries
+    const [dsrResult, stockResult, expenseResult] = await Promise.all([
+      supabaseClient
+        .from("dsr")
+        .select("product, total_sales, testing, stock, petrol_rate, diesel_rate")
+        .gte("date", startDate)
+        .lte("date", endDate),
+      supabaseClient
+        .from("dsr_stock")
+        .select("product, variation")
+        .gte("date", startDate)
+        .lte("date", endDate),
+      supabaseClient
+        .from("expenses")
+        .select("*")
+        .gte("date", startDate)
+        .lte("date", endDate),
+    ]);
+
+    return {
+      dsrData: dsrResult.data,
+      stockData: stockResult.data,
+      expenseData: expenseResult.data,
+      dsrError: dsrResult.error,
+      stockError: stockResult.error,
+      expenseError: expenseResult.error,
+    };
+  }
+}
+
 async function loadDsrSummary(range) {
   const petrolStockEl = document.getElementById("dsr-petrol-stock");
   const dieselStockEl = document.getElementById("dsr-diesel-stock");
@@ -506,27 +564,9 @@ async function loadDsrSummary(range) {
   if (dieselVariationEl) dieselVariationEl.textContent = "Loading…";
   if (expenseEl) expenseEl.textContent = "Loading…";
 
-  const [
-    { data: dsrData, error: dsrError },
-    { data: stockData, error: stockError },
-    { data: expenseData, error: expenseError },
-  ] = await Promise.all([
-    supabaseClient
-      .from("dsr")
-      .select("product, total_sales, testing, stock, petrol_rate, diesel_rate")
-      .gte("date", range.start)
-      .lte("date", range.end),
-    supabaseClient
-      .from("dsr_stock")
-      .select("product, variation")
-      .gte("date", range.start)
-      .lte("date", range.end),
-    supabaseClient
-      .from("expenses")
-      .select("*")
-      .gte("date", range.start)
-      .lte("date", range.end),
-  ]);
+  // Use Edge Function for single round-trip (with fallback)
+  const { dsrData, stockData, expenseData, dsrError, stockError, expenseError } =
+    await fetchDashboardData(range.start, range.end);
 
   if (dsrError) console.error(dsrError);
   if (stockError) console.error(stockError);
