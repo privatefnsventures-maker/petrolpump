@@ -28,6 +28,7 @@ const STATIC_ASSETS = [
   "/css/landing.css",
   "/css/login.css",
   "/js/env.js",
+  "/js/utils.js",
   "/js/supabase.js",
   "/js/auth.js",
   "/js/cache.js",

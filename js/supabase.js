@@ -37,20 +37,6 @@ if (
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 /**
- * Utility to format amounts as INR currency.
- */
-function formatCurrency(value) {
-  if (value === null || value === undefined || Number.isNaN(Number(value))) {
-    return "₹0";
-  }
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(Number(value));
-}
-
-/**
  * Register Service Worker for offline capability and caching
  */
 function registerServiceWorker() {
@@ -179,7 +165,6 @@ if (window.AppCache) {
 }
 
 window.supabaseClient = supabaseClient;
-window.formatCurrency = formatCurrency;
 window.clearAllCaches = clearAllCaches;
 window.clearApiCaches = clearApiCaches;
 window.getCacheStats = getCacheStats;
