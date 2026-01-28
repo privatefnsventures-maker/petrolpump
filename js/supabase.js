@@ -1,17 +1,47 @@
 /* global supabase */
 
 const runtimeConfig = window.__APP_CONFIG__ || {};
+const runtimeEnv = runtimeConfig.APP_ENV || "staging";
 
 // Update these with your Supabase project details.
-const SUPABASE_URL =
-  runtimeConfig.SUPABASE_URL || "https://lbpweydzbydndbayhstk.supabase.co";
-const SUPABASE_ANON_KEY =
-  runtimeConfig.SUPABASE_ANON_KEY ||
-  "sb_publishable_U-_hFv3Qwq_E30-lxCrb7Q_wC8c8c6H";
+const STAGING_SUPABASE_URL = "https://sshxdavhbwfhzzxxdrhn.supabase.co";
+const STAGING_SUPABASE_ANON_KEY =
+  "sb_publishable_Vi8TjINOqGDlANzBH0nnrw_WJ3tGspz";
 
-if (!SUPABASE_URL || SUPABASE_URL.includes("YOUR-PROJECT-ID")) {
+const LOCAL_HOSTS = ["localhost", "127.0.0.1"];
+const PROD_HOSTS = ["bishnupriyafuels.fnsventures.in"];
+const hostname = window.location.hostname;
+const isLocalhost = LOCAL_HOSTS.includes(hostname);
+const isProdHost = PROD_HOSTS.includes(hostname);
+
+let SUPABASE_URL = runtimeConfig.SUPABASE_URL || STAGING_SUPABASE_URL;
+let SUPABASE_ANON_KEY =
+  runtimeConfig.SUPABASE_ANON_KEY || STAGING_SUPABASE_ANON_KEY;
+
+if (isLocalhost || (runtimeEnv === "prod" && !isProdHost)) {
+  SUPABASE_URL = STAGING_SUPABASE_URL;
+  SUPABASE_ANON_KEY = STAGING_SUPABASE_ANON_KEY;
+}
+
+if (!runtimeConfig.SUPABASE_URL || !runtimeConfig.SUPABASE_ANON_KEY) {
   console.warn(
-    "Supabase URL and anon key are placeholders. Update js/supabase.js before deploying."
+    "Supabase runtime config missing; falling back to staging defaults."
+  );
+}
+
+if (runtimeEnv === "prod" && !isProdHost) {
+  console.warn(
+    "APP_ENV is prod on a non-prod host; using staging Supabase."
+  );
+}
+
+if (
+  !SUPABASE_URL ||
+  !SUPABASE_ANON_KEY ||
+  SUPABASE_URL.includes("YOUR-PROJECT-ID")
+) {
+  console.warn(
+    "Supabase config is invalid. Check js/env.js and environment secrets."
   );
 }
 
