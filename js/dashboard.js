@@ -596,7 +596,7 @@ async function fetchDashboardData(startDate, endDate, onUpdate = null) {
 
   const fetchFn = async () => {
     try {
-      // Attempt to use the Edge Function with retry for transient failures
+      // Edge Function with retry; we retry only on transient errors (via isTransientError)
       const { data, error } = await AppError.withRetry(
         () =>
           supabaseClient.functions.invoke("get-dashboard-data", {
