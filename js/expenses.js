@@ -31,6 +31,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         amount: Number(formData.get("amount") || 0),
       };
 
+      // Add created_by for RLS policy compliance
+      if (auth.session?.user?.id) {
+        payload.created_by = auth.session.user.id;
+      }
+
       if (!payload.date) {
         if (errorEl) {
           errorEl.textContent = "Date is required.";
