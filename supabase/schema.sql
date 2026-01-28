@@ -360,6 +360,7 @@ create table if not exists public.expenses (
 );
 
 create index if not exists expenses_date_idx on public.expenses (date desc);
+create index if not exists expenses_created_at_idx on public.expenses (created_at desc);
 
 comment on table public.expenses is 'Daily operating expenses for profit/loss.';
 
@@ -466,6 +467,7 @@ create table if not exists public.credit_customers (
 );
 
 create index if not exists credit_amount_idx on public.credit_customers (amount_due desc);
+create index if not exists credit_customers_created_at_idx on public.credit_customers (created_at desc);
 
 comment on table public.credit_customers is 'Credit ledger for fleet and institutional customers.';
 
