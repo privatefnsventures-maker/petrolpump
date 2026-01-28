@@ -92,7 +92,11 @@ async function loadCreditLedger() {
            <button class="settle-confirm" data-id="${row.id}">Settle</button>
            <span class="settle-msg muted" aria-hidden="true"></span>
          </div>`
-      : `<span class="muted">Cleared</span>`;
+      : `<div class="settle-inline">
+           <span class="muted">Cleared</span>
+           <button class="delete-entry" data-id="${row.id}" title="Delete settled entry">Delete</button>
+           <span class="settle-msg muted" aria-hidden="true"></span>
+         </div>`;
 
     tr.innerHTML = `
       <td>${escapeHtml(row.customer_name)}</td>
@@ -179,11 +183,15 @@ document.addEventListener("click", async (e) => {
   } else {
     msg.textContent = `Settled · remaining ${formatCurrency(remaining)}`;
   }
-  // remove action controls for fully settled after a short delay (allow msg to appear)
+  // update action controls for fully settled after a short delay (allow msg to appear)
   if (remaining === 0) {
     setTimeout(() => {
       if (container && container.parentElement) {
-        container.parentElement.innerHTML = '<span class="muted">Cleared</span>';
+        container.parentElement.innerHTML = `<div class="settle-inline">
+           <span class="muted">Cleared</span>
+           <button class="delete-entry" data-id="${id}" title="Delete settled entry">Delete</button>
+           <span class="settle-msg muted" aria-hidden="true"></span>
+         </div>`;
       }
     }, 800);
   }
@@ -194,6 +202,64 @@ document.addEventListener("click", async (e) => {
     msg.classList.add("muted");
     msg.textContent = "";
   }, 3500);
+  try {
+    localStorage.setItem("credit-updated", String(Date.now()));
+  } catch (e) {
+    /* ignore */
+  }
+});
+
+// Handle delete button clicks for settled entries
+document.addEventListener("click", async (e) => {
+  const btn = e.target.closest && e.target.closest(".delete-entry");
+  if (!btn) return;
+
+  const id = btn.dataset.id;
+  if (!id) return;
+
+  const tr = btn.closest("tr");
+  const customerName = tr ? tr.querySelector("td")?.textContent : "this entry";
+
+  // Confirm deletion
+  const confirmed = confirm(`Are you sure you want to delete the settled entry for "${customerName}"? This action cannot be undone.`);
+  if (!confirmed) return;
+
+  const container = btn.closest(".settle-inline");
+  const msg = container?.querySelector(".settle-msg");
+
+  btn.disabled = true;
+  if (msg) msg.textContent = "Deleting…";
+
+  const { error } = await supabaseClient
+    .from("credit_customers")
+    .delete()
+    .eq("id", id);
+
+  if (error) {
+    btn.disabled = false;
+    if (msg) {
+      msg.classList.remove("muted");
+      msg.classList.add("error");
+      msg.textContent = error.message;
+    }
+    console.error("Failed to delete credit entry:", error);
+    return;
+  }
+
+  // Remove the row from the table
+  if (tr) {
+    tr.style.transition = "opacity 0.3s ease";
+    tr.style.opacity = "0";
+    setTimeout(() => {
+      tr.remove();
+      // Check if table is now empty
+      const tbody = document.getElementById("credit-table-body");
+      if (tbody && tbody.querySelectorAll("tr").length === 0) {
+        tbody.innerHTML = "<tr><td colspan='6' class='muted'>No credit customers recorded yet.</td></tr>";
+      }
+    }, 300);
+  }
+
   try {
     localStorage.setItem("credit-updated", String(Date.now()));
   } catch (e) {

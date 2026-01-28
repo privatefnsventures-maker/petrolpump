@@ -218,3 +218,10 @@ create policy "credit_update_authenticated" on public.credit_customers
   to authenticated
   using (true)
   with check (true);
+
+-- Allow authenticated users to delete settled credit records
+drop policy if exists "credit_delete_authenticated" on public.credit_customers;
+create policy "credit_delete_authenticated" on public.credit_customers
+  for delete
+  to authenticated
+  using (true);

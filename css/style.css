@@ -438,6 +438,38 @@ button:disabled {
   cursor: not-allowed;
 }
 
+/* Settle and delete inline actions */
+.settle-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.settle-inline .settle-amount {
+  width: 80px;
+}
+
+.settle-inline .settle-confirm {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.85rem;
+}
+
+.settle-inline .delete-entry {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.85rem;
+  background: #dc2626;
+  color: #fff;
+}
+
+.settle-inline .delete-entry:hover {
+  background: #b91c1c;
+}
+
+.settle-inline .settle-msg {
+  font-size: 0.85rem;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;

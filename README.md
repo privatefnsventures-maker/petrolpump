@@ -64,6 +64,28 @@ Create two environments in GitHub: `prod` and `staging`, each with:
 
 ## Local Development
 
+### 1. Configure Supabase credentials
+
+Copy the example environment file and add your credentials:
+
+```bash
+cp js/env.example.js js/env.js
+```
+
+Edit `js/env.js` with your Supabase project details:
+
+```javascript
+window.__APP_CONFIG__ = {
+  SUPABASE_URL: "https://your-project-id.supabase.co",
+  SUPABASE_ANON_KEY: "your-anon-key-here",
+  APP_ENV: "development",
+};
+```
+
+> **Note:** `js/env.js` is gitignored to prevent accidental credential commits.
+
+### 2. Start a local server
+
 Run a local server on port 3000:
 
 ```bash
