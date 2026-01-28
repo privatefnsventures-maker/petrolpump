@@ -1,5 +1,15 @@
 /* global supabaseClient, requireAuth, applyRoleVisibility, formatCurrency */
 
+// Simple HTML escape for XSS prevention
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
   const auth = await requireAuth({
     allowedRoles: ["admin", "supervisor"],
@@ -75,8 +85,8 @@ async function loadOpenCredit(dateStr) {
   filtered.forEach((row) => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${row.customer_name}</td>
-      <td>${row.vehicle_no ?? "—"}</td>
+      <td>${escapeHtml(row.customer_name)}</td>
+      <td>${escapeHtml(row.vehicle_no ?? "—")}</td>
       <td>${formatCurrency(row.amount_due)}</td>
       <td>${row.last_payment ?? "—"}</td>
       <td>${formatDate(row.created_at)}</td>

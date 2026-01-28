@@ -1,5 +1,15 @@
 /* global supabaseClient, requireAuth, applyRoleVisibility, formatCurrency */
 
+// Simple HTML escape for XSS prevention
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 let snapshotDsrRows = [];
 
 function normalizeProduct(value) {
@@ -466,7 +476,7 @@ async function loadRecentActivity() {
   list.innerHTML = "";
   entries.slice(0, 8).forEach((entry) => {
     const li = document.createElement("li");
-    li.innerHTML = `<strong>${entry.type}:</strong> ${entry.label} · ${entry.detail}`;
+    li.innerHTML = `<strong>${escapeHtml(entry.type)}:</strong> ${escapeHtml(entry.label)} · ${escapeHtml(entry.detail)}`;
     list.appendChild(li);
   });
 }

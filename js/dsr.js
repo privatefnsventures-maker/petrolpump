@@ -1,5 +1,15 @@
 /* global supabaseClient, requireAuth, applyRoleVisibility */
 
+// Simple HTML escape for XSS prevention
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 const PRODUCTS = ["petrol", "diesel"];
 let currentUserId = null;
 
@@ -209,7 +219,7 @@ async function loadReadingHistory(product) {
       <td>${formatQuantity(row.dip_reading)}</td>
       <td>${formatQuantity(row.stock)}</td>
       <td>${rate ? formatCurrency(rate) : "—"}</td>
-      <td>${row.remarks ?? "—"}</td>
+      <td>${escapeHtml(row.remarks ?? "—")}</td>
     `;
     tbody.appendChild(tr);
   });
@@ -255,7 +265,7 @@ async function loadStockHistory(product) {
       <td>${formatQuantity(row.closing_stock)}</td>
       <td>${formatQuantity(row.dip_stock)}</td>
       <td>${formatQuantity(row.variation)}</td>
-      <td>${row.remark ?? "—"}</td>
+      <td>${escapeHtml(row.remark ?? "—")}</td>
     `;
     tbody.appendChild(tr);
   });

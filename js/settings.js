@@ -1,5 +1,15 @@
 /* global supabaseClient, requireAuth, applyRoleVisibility */
 
+// Simple HTML escape for XSS prevention
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
   // Server-side role verification via check_page_access() function
   // Even if user bypasses client-side checks, RLS policies block unauthorized access
@@ -123,8 +133,8 @@ async function loadStaffList() {
   data.forEach((row) => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${row.email}</td>
-      <td>${row.role}</td>
+      <td>${escapeHtml(row.email)}</td>
+      <td>${escapeHtml(row.role)}</td>
       <td>${formatDate(row.created_at)}</td>
     `;
     tbody.appendChild(tr);
