@@ -4,9 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Dashboard · Petrol Pump</title>
-    <link rel="stylesheet" href="css/style.css" />
-    <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="css/base.css" />
+    <link rel="stylesheet" href="css/app.css" />
+    <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3"></script>
     <script defer src="js/env.js"></script>
+    <script defer src="js/errorHandler.js"></script>
+    <script defer src="js/cache.js"></script>
+    <script defer src="js/utils.js"></script>
     <script defer src="js/supabase.js"></script>
     <script defer src="js/auth.js?v=2"></script>
     <script defer src="js/dashboard.js"></script>
@@ -52,6 +56,7 @@
                 step="0.01"
                 min="0"
                 placeholder="Optional"
+                readonly
               />
             </div>
             <div class="form-field">
@@ -63,6 +68,7 @@
                 step="0.01"
                 min="0"
                 placeholder="Optional"
+                readonly
               />
             </div>
           </div>
@@ -72,15 +78,15 @@
           <a class="card-link" href="sales-daily.html">
             <article class="card highlight-card clickable-card">
               <h3>Total Sale</h3>
-              <div class="metric-row">
-                <div class="metric-box">
-                  <small class="muted">Quantity (L)</small>
+              <div class="stat-grid">
+                <article class="stat-tile">
+                  <h4>Quantity (L)</h4>
                   <p class="stat" id="today-total">&#8212;</p>
-                </div>
-                <div class="metric-box">
-                  <small class="muted">Price (₹)</small>
+                </article>
+                <article class="stat-tile">
+                  <h4>Price (₹)</h4>
                   <p class="stat stat-sub" id="today-total-rupees">&#8212;</p>
-                </div>
+                </article>
               </div>
               <small id="today-date" class="muted"></small>
             </article>
@@ -130,54 +136,44 @@
         <div class="fuel-grid">
           <article class="card fuel-card">
             <h3>Petrol</h3>
-            <div class="metric-row">
-              <div class="metric-box wide">
-                <small class="muted">Net sale</small>
-                <div class="metric-inline">
-                  <div>
-                    <p class="stat" id="dsr-petrol-net-sale">&#8212;</p>
-                    <small class="muted">L</small>
-                  </div>
-                  <div>
-                    <p class="stat stat-sub" id="dsr-petrol-net-sale-rupees">&#8212;</p>
-                    <small class="muted">₹</small>
-                  </div>
-                </div>
-              </div>
-              <div class="metric-box">
-                <small class="muted">Stock (L)</small>
+            <div class="stat-grid">
+              <article class="stat-tile">
+                <h4>Net sale (L)</h4>
+                <p class="stat" id="dsr-petrol-net-sale">&#8212;</p>
+              </article>
+              <article class="stat-tile">
+                <h4>Net sale (₹)</h4>
+                <p class="stat stat-sub" id="dsr-petrol-net-sale-rupees">&#8212;</p>
+              </article>
+              <article class="stat-tile">
+                <h4>Stock (L)</h4>
                 <p class="stat" id="dsr-petrol-stock">&#8212;</p>
-              </div>
-              <div class="metric-box">
-                <small class="muted">Variation (L)</small>
+              </article>
+              <article class="stat-tile">
+                <h4>Variation (L)</h4>
                 <p class="stat" id="dsr-petrol-variation">&#8212;</p>
-              </div>
+              </article>
             </div>
           </article>
           <article class="card fuel-card">
             <h3>Diesel</h3>
-            <div class="metric-row">
-              <div class="metric-box wide">
-                <small class="muted">Net sale</small>
-                <div class="metric-inline">
-                  <div>
-                    <p class="stat" id="dsr-diesel-net-sale">&#8212;</p>
-                    <small class="muted">L</small>
-                  </div>
-                  <div>
-                    <p class="stat stat-sub" id="dsr-diesel-net-sale-rupees">&#8212;</p>
-                    <small class="muted">₹</small>
-                  </div>
-                </div>
-              </div>
-              <div class="metric-box">
-                <small class="muted">Stock (L)</small>
+            <div class="stat-grid">
+              <article class="stat-tile">
+                <h4>Net sale (L)</h4>
+                <p class="stat" id="dsr-diesel-net-sale">&#8212;</p>
+              </article>
+              <article class="stat-tile">
+                <h4>Net sale (₹)</h4>
+                <p class="stat stat-sub" id="dsr-diesel-net-sale-rupees">&#8212;</p>
+              </article>
+              <article class="stat-tile">
+                <h4>Stock (L)</h4>
                 <p class="stat" id="dsr-diesel-stock">&#8212;</p>
-              </div>
-              <div class="metric-box">
-                <small class="muted">Variation (L)</small>
+              </article>
+              <article class="stat-tile">
+                <h4>Variation (L)</h4>
                 <p class="stat" id="dsr-diesel-variation">&#8212;</p>
-              </div>
+              </article>
             </div>
           </article>
           <article class="card fuel-card">
@@ -198,8 +194,33 @@
           <div>
             <h2>Profit &amp; Loss</h2>
             <p class="muted">Admin-only summary for the selected range.</p>
+            <p id="pl-date-label" class="muted">Loading range…</p>
           </div>
         </div>
+
+        <form id="pl-filter-form" class="dsr-filter" autocomplete="off">
+          <div class="form-field">
+            <label for="pl-range">Range</label>
+            <select id="pl-range">
+              <option value="this-week">This week</option>
+              <option value="this-month" selected>This month</option>
+              <option value="custom">Custom dates</option>
+            </select>
+          </div>
+          <div id="pl-custom-range" class="custom-range hidden">
+            <div class="form-field">
+              <label for="pl-start">From</label>
+              <input id="pl-start" type="date" />
+            </div>
+            <div class="form-field">
+              <label for="pl-end">To</label>
+              <input id="pl-end" type="date" />
+            </div>
+          </div>
+          <div class="filter-actions">
+            <button type="submit" id="pl-apply">Apply</button>
+          </div>
+        </form>
 
         <div class="stat-grid">
           <article class="stat-tile">
@@ -214,6 +235,17 @@
             <h3 id="pl-label">Profit</h3>
             <p class="stat" id="pl-value">&#8212;</p>
           </article>
+        </div>
+
+        <div class="pl-income">
+          <span class="tab-box">Income</span>
+          <div class="stat-grid pl-income-grid">
+            <article class="stat-tile">
+              <h3>Income (₹)</h3>
+              <p class="stat" id="income-total">&#8212;</p>
+            </article>
+          </div>
+          <p id="income-note" class="muted"></p>
         </div>
       </section>
 
