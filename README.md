@@ -96,3 +96,15 @@ Open:
 
 - `http://localhost:3000/`
 
+## Long-Term Improvements
+
+Planned enhancements for scalability, offline use, and multi-site support:
+
+| Area | Improvement | Rationale |
+|------|-------------|-----------|
+| **Frontend** | Migrate to a framework (React, Vue, or Svelte) | Better state management, component reuse, and tooling; easier to maintain as the app grows. |
+| **Offline** | Add PWA support | Offline capability for field use (e.g. forecourt devices with flaky connectivity); installable app and cached assets. |
+| **Multi-site** | Implement multi-tenancy | Support multiple locations (pump sites) with per-location data and optional central reporting. |
+| **Live data** | Add real-time subscriptions | Live dashboard updates via Supabase Realtime (e.g. sales, credit, activity) without manual refresh. |
+| **Mobile** | Create mobile app (React Native or Flutter) | Native or cross-platform app for operators on tablets/phones; can wrap existing API and auth. |
+
