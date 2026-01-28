@@ -1,4 +1,35 @@
-/* global supabaseClient, requireAuth, applyRoleVisibility, formatCurrency */
+/* global supabaseClient, requireAuth, applyRoleVisibility, formatCurrency, AppCache, AppError */
+
+// Simple HTML escape for XSS prevention
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/**
+ * Generate cache key for dashboard data queries
+ */
+function getDashboardCacheKey(startDate, endDate) {
+  return `dashboard_${startDate}_${endDate}`;
+}
+
+/**
+ * Generate cache key for today's sales
+ */
+function getTodaySalesCacheKey(dateStr) {
+  return `today_sales_${dateStr}`;
+}
+
+/**
+ * Generate cache key for credit summary
+ */
+function getCreditSummaryCacheKey(dateStr) {
+  return `credit_summary_${dateStr}`;
+}
 
 let snapshotDsrRows = [];
 
@@ -113,7 +144,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     console.log("All dashboard initializations completed successfully");
     scheduleAutoFitStats();
   } catch (error) {
-    console.error("Error during dashboard initialization:", error);
+    AppError.handle(error, { context: { source: "dashboardInit" } });
   }
 });
 
@@ -240,14 +271,43 @@ async function loadTodaySales(dateStr) {
   const dieselRateInput = document.getElementById("snapshot-diesel-rate");
 
   const selectedDate = dateStr || new Date().toISOString().slice(0, 10);
+  const cacheKey = getTodaySalesCacheKey(selectedDate);
 
-  const { data, error } = await supabaseClient
-    .from("dsr")
-    .select("product, total_sales, petrol_rate, diesel_rate")
-    .eq("date", selectedDate);
+  // Use stale-while-revalidate pattern for cached data
+  const fetchFn = async () => {
+    const { data, error } = await supabaseClient
+      .from("dsr")
+      .select("product, total_sales, petrol_rate, diesel_rate")
+      .eq("date", selectedDate);
 
-  if (error) {
-    console.error("DSR query error:", error);
+    if (error) {
+      AppError.report(error, { context: "loadTodaySales", date: selectedDate });
+      return null;
+    }
+    return data ?? [];
+  };
+
+  // Callback to update UI when fresh data arrives
+  const onUpdate = (freshData) => {
+    renderTodaySales(freshData, selectedDate, todayStat, todayRupees, todayDate, petrolRateInput, dieselRateInput);
+  };
+
+  // Try to get cached data with SWR pattern
+  let data;
+  if (AppCache) {
+    data = await AppCache.getWithSWR(cacheKey, fetchFn, "today_sales", onUpdate);
+  } else {
+    data = await fetchFn();
+  }
+
+  renderTodaySales(data, selectedDate, todayStat, todayRupees, todayDate, petrolRateInput, dieselRateInput);
+}
+
+/**
+ * Render today's sales data to UI
+ */
+function renderTodaySales(data, selectedDate, todayStat, todayRupees, todayDate, petrolRateInput, dieselRateInput) {
+  if (!data) {
     snapshotDsrRows = [];
     if (todayStat) todayStat.textContent = "—";
     if (todayDate) {
@@ -265,7 +325,7 @@ async function loadTodaySales(dateStr) {
     return;
   }
 
-  snapshotDsrRows = data ?? [];
+  snapshotDsrRows = data;
 
   const totalLiters = snapshotDsrRows.reduce(
     (sum, row) => sum + Number(row.total_sales ?? 0),
@@ -361,29 +421,53 @@ function updateTotalSaleRupees() {
 async function loadCreditSummary(dateStr) {
   const creditTotal = document.getElementById("credit-total");
   const selectedDate = dateStr || new Date().toISOString().slice(0, 10);
-  const endOfDay = new Date(`${selectedDate}T23:59:59.999Z`).getTime();
+  const endOfDayISO = `${selectedDate}T23:59:59.999Z`;
+  const cacheKey = getCreditSummaryCacheKey(selectedDate);
 
-  // Fetch outstanding rows and filter client-side by last_payment (fallback to created_at)
-  const { data, error } = await supabaseClient
-    .from("credit_customers")
-    .select("customer_name, amount_due, last_payment, created_at")
-    .gt("amount_due", 0);
+  const fetchFn = async () => {
+    // Filter in database: last_payment <= date OR (last_payment is null AND created_at <= endOfDay)
+    const { data, error } = await supabaseClient
+      .from("credit_customers")
+      .select("amount_due")
+      .gt("amount_due", 0)
+      .or(
+        `and(last_payment.not.is.null,last_payment.lte.${selectedDate}),` +
+        `and(last_payment.is.null,created_at.lte.${endOfDayISO})`
+      );
 
-  if (error) {
-    console.error(error);
+    if (error) {
+      AppError.report(error, { context: "loadCreditSummary", date: selectedDate });
+      return null;
+    }
+    return data ?? [];
+  };
+
+  // Callback to update UI when fresh data arrives
+  const onUpdate = (freshData) => {
+    renderCreditSummary(freshData, creditTotal);
+  };
+
+  // Try to get cached data with SWR pattern
+  let data;
+  if (AppCache) {
+    data = await AppCache.getWithSWR(cacheKey, fetchFn, "credit_summary", onUpdate);
+  } else {
+    data = await fetchFn();
+  }
+
+  renderCreditSummary(data, creditTotal);
+}
+
+/**
+ * Render credit summary to UI
+ */
+function renderCreditSummary(data, creditTotal) {
+  if (!data) {
     if (creditTotal) creditTotal.textContent = "—";
     return;
   }
 
-  const filtered = (data ?? []).filter((row) => {
-    const last = row.last_payment ? new Date(`${row.last_payment}T00:00:00Z`) : null;
-    const created = row.created_at ? new Date(row.created_at) : null;
-    const effective = last || created;
-    if (!effective) return false;
-    return effective.getTime() <= endOfDay;
-  });
-
-  const total = filtered.reduce((sum, row) => sum + Number(row.amount_due ?? 0), 0);
+  const total = data.reduce((sum, row) => sum + Number(row.amount_due ?? 0), 0);
   if (creditTotal) creditTotal.textContent = formatCurrency(total);
 }
 
@@ -417,26 +501,57 @@ async function loadRecentActivity() {
   if (!list) return;
   list.innerHTML = "<li class='muted'>Fetching recent activity…</li>";
 
-  const [{ data: dsrData, error: dsrError }, { data: creditData, error: creditError }] =
-    await Promise.all([
-      supabaseClient
-        .from("dsr")
-        .select("date, product, total_sales, created_at")
-        .order("created_at", { ascending: false })
-        .limit(4),
-      supabaseClient
-        .from("credit_customers")
-        .select("customer_name, amount_due, created_at")
-        .order("created_at", { ascending: false })
-        .limit(4),
-    ]);
+  const cacheKey = "recent_activity";
 
-  if (dsrError) console.error(dsrError);
-  if (creditError) console.error(creditError);
+  const fetchFn = async () => {
+    const [{ data: dsrData, error: dsrError }, { data: creditData, error: creditError }] =
+      await Promise.all([
+        supabaseClient
+          .from("dsr")
+          .select("date, product, total_sales, created_at")
+          .order("created_at", { ascending: false })
+          .limit(4),
+        supabaseClient
+          .from("credit_customers")
+          .select("customer_name, amount_due, created_at")
+          .order("created_at", { ascending: false })
+          .limit(4),
+      ]);
+
+    if (dsrError) AppError.report(dsrError, { context: "loadRecentActivity", type: "dsr" });
+    if (creditError) AppError.report(creditError, { context: "loadRecentActivity", type: "credit" });
+
+    return {
+      dsrData: dsrData ?? [],
+      creditData: creditData ?? [],
+    };
+  };
+
+  // Callback to update UI when fresh data arrives
+  const onUpdate = (freshData) => {
+    renderRecentActivity(freshData, list);
+  };
+
+  // Try to get cached data with SWR pattern
+  let data;
+  if (AppCache) {
+    data = await AppCache.getWithSWR(cacheKey, fetchFn, "recent_activity", onUpdate);
+  } else {
+    data = await fetchFn();
+  }
+
+  renderRecentActivity(data, list);
+}
+
+/**
+ * Render recent activity to UI
+ */
+function renderRecentActivity(data, list) {
+  if (!list) return;
 
   const entries = [];
 
-  (dsrData ?? []).forEach((row) => {
+  (data?.dsrData ?? []).forEach((row) => {
     entries.push({
       type: "DSR",
       label: `${row.product?.toUpperCase() ?? ""}`,
@@ -445,7 +560,7 @@ async function loadRecentActivity() {
     });
   });
 
-  (creditData ?? []).forEach((row) => {
+  (data?.creditData ?? []).forEach((row) => {
     entries.push({
       type: "Credit",
       label: `${row.customer_name} updated`,
@@ -466,61 +581,124 @@ async function loadRecentActivity() {
   list.innerHTML = "";
   entries.slice(0, 8).forEach((entry) => {
     const li = document.createElement("li");
-    li.innerHTML = `<strong>${entry.type}:</strong> ${entry.label} · ${entry.detail}`;
+    li.innerHTML = `<strong>${escapeHtml(entry.type)}:</strong> ${escapeHtml(entry.label)} · ${escapeHtml(entry.detail)}`;
     list.appendChild(li);
   });
 }
 
+/**
+ * Fetches dashboard data using Edge Function (single round-trip) with fallback
+ * to parallel client-side queries if the Edge Function is unavailable.
+ * Uses stale-while-revalidate caching pattern.
+ */
+async function fetchDashboardData(startDate, endDate, onUpdate = null) {
+  const cacheKey = getDashboardCacheKey(startDate, endDate);
+
+  const fetchFn = async () => {
+    try {
+      // Edge Function with retry; we retry only on transient errors (via isTransientError)
+      const { data, error } = await AppError.withRetry(
+        () =>
+          supabaseClient.functions.invoke("get-dashboard-data", {
+            body: { startDate, endDate },
+          }),
+        { maxAttempts: 3 }
+      );
+
+      if (error) {
+        throw error;
+      }
+
+      return {
+        dsrData: data.dsrData,
+        stockData: data.stockData,
+        expenseData: data.expenseData,
+        dsrError: data.errors?.dsr ? new Error(data.errors.dsr) : null,
+        stockError: data.errors?.stock ? new Error(data.errors.stock) : null,
+        expenseError: data.errors?.expense ? new Error(data.errors.expense) : null,
+      };
+    } catch {
+      // Fallback: use parallel client-side queries
+      const [dsrResult, stockResult, expenseResult] = await Promise.all([
+        supabaseClient
+          .from("dsr")
+          .select("product, total_sales, testing, stock, petrol_rate, diesel_rate")
+          .gte("date", startDate)
+          .lte("date", endDate),
+        supabaseClient
+          .from("dsr_stock")
+          .select("product, variation")
+          .gte("date", startDate)
+          .lte("date", endDate),
+        supabaseClient
+          .from("expenses")
+          .select("*")
+          .gte("date", startDate)
+          .lte("date", endDate),
+      ]);
+
+      return {
+        dsrData: dsrResult.data,
+        stockData: stockResult.data,
+        expenseData: expenseResult.data,
+        dsrError: dsrResult.error,
+        stockError: stockResult.error,
+        expenseError: expenseResult.error,
+      };
+    }
+  };
+
+  // Use stale-while-revalidate pattern
+  if (AppCache) {
+    return AppCache.getWithSWR(cacheKey, fetchFn, "dashboard_data", onUpdate);
+  }
+
+  return fetchFn();
+}
+
 async function loadDsrSummary(range) {
-  const petrolStockEl = document.getElementById("dsr-petrol-stock");
-  const dieselStockEl = document.getElementById("dsr-diesel-stock");
-  const petrolNetSaleEl = document.getElementById("dsr-petrol-net-sale");
-  const dieselNetSaleEl = document.getElementById("dsr-diesel-net-sale");
-  const petrolNetSaleRupeesEl = document.getElementById(
-    "dsr-petrol-net-sale-rupees"
-  );
-  const dieselNetSaleRupeesEl = document.getElementById(
-    "dsr-diesel-net-sale-rupees"
-  );
-  const petrolVariationEl = document.getElementById("dsr-petrol-variation");
-  const dieselVariationEl = document.getElementById("dsr-diesel-variation");
-  const expenseEl = document.getElementById("dsr-expense");
+  const elements = {
+    petrolStockEl: document.getElementById("dsr-petrol-stock"),
+    dieselStockEl: document.getElementById("dsr-diesel-stock"),
+    petrolNetSaleEl: document.getElementById("dsr-petrol-net-sale"),
+    dieselNetSaleEl: document.getElementById("dsr-diesel-net-sale"),
+    petrolNetSaleRupeesEl: document.getElementById("dsr-petrol-net-sale-rupees"),
+    dieselNetSaleRupeesEl: document.getElementById("dsr-diesel-net-sale-rupees"),
+    petrolVariationEl: document.getElementById("dsr-petrol-variation"),
+    dieselVariationEl: document.getElementById("dsr-diesel-variation"),
+    expenseEl: document.getElementById("dsr-expense"),
+  };
 
-  if (petrolStockEl) petrolStockEl.textContent = "Loading…";
-  if (dieselStockEl) dieselStockEl.textContent = "Loading…";
-  if (petrolNetSaleEl) petrolNetSaleEl.textContent = "Loading…";
-  if (dieselNetSaleEl) dieselNetSaleEl.textContent = "Loading…";
-  if (petrolNetSaleRupeesEl) petrolNetSaleRupeesEl.textContent = "Loading…";
-  if (dieselNetSaleRupeesEl) dieselNetSaleRupeesEl.textContent = "Loading…";
-  if (petrolVariationEl) petrolVariationEl.textContent = "Loading…";
-  if (dieselVariationEl) dieselVariationEl.textContent = "Loading…";
-  if (expenseEl) expenseEl.textContent = "Loading…";
+  // Show loading state
+  Object.values(elements).forEach((el) => {
+    if (el) el.textContent = "Loading…";
+  });
 
-  const [
-    { data: dsrData, error: dsrError },
-    { data: stockData, error: stockError },
-    { data: expenseData, error: expenseError },
-  ] = await Promise.all([
-    supabaseClient
-      .from("dsr")
-      .select("product, total_sales, testing, stock, petrol_rate, diesel_rate")
-      .gte("date", range.start)
-      .lte("date", range.end),
-    supabaseClient
-      .from("dsr_stock")
-      .select("product, variation")
-      .gte("date", range.start)
-      .lte("date", range.end),
-    supabaseClient
-      .from("expenses")
-      .select("*")
-      .gte("date", range.start)
-      .lte("date", range.end),
-  ]);
+  // Callback to update UI when fresh data arrives
+  const onUpdate = (freshData) => {
+    renderDsrSummary(freshData, elements);
+  };
 
-  if (dsrError) console.error(dsrError);
-  if (stockError) console.error(stockError);
-  if (expenseError) console.error(expenseError);
+  // Use Edge Function for single round-trip (with fallback and caching)
+  const dashboardData = await fetchDashboardData(range.start, range.end, onUpdate);
+  renderDsrSummary(dashboardData, elements);
+}
+
+/**
+ * Render DSR summary data to UI elements
+ */
+function renderDsrSummary(data, elements) {
+  const {
+    petrolStockEl, dieselStockEl, petrolNetSaleEl, dieselNetSaleEl,
+    petrolNetSaleRupeesEl, dieselNetSaleRupeesEl, petrolVariationEl,
+    dieselVariationEl, expenseEl
+  } = elements;
+
+  const { dsrData, stockData, expenseData, dsrError, stockError, expenseError } = data || {};
+
+  if (dsrError) AppError.report(dsrError, { context: "renderDsrSummary", type: "dsr" });
+  if (stockError) AppError.report(stockError, { context: "renderDsrSummary", type: "stock" });
+  if (expenseError) AppError.report(expenseError, { context: "renderDsrSummary", type: "expense" });
 
   const hasDsr = !dsrError;
   const hasStock = !stockError;
@@ -538,7 +716,6 @@ async function loadDsrSummary(range) {
     "diesel",
     (row) => Number(row.total_sales ?? 0) - Number(row.testing ?? 0)
   );
-  const totalNetSale = petrolNetSale + dieselNetSale;
   const petrolVariation = sumByProduct(
     stockData,
     "petrol",
@@ -782,8 +959,8 @@ async function loadProfitLossSummary(range) {
       .lte("date", range.end),
   ]);
 
-  if (dsrError) console.error(dsrError);
-  if (expenseError) console.error(expenseError);
+  if (dsrError) AppError.report(dsrError, { context: "profitLossSummary", type: "dsr" });
+  if (expenseError) AppError.report(expenseError, { context: "profitLossSummary", type: "expense" });
 
   const hasDsr = !dsrError;
   const hasExpense = !expenseError;
@@ -1050,11 +1227,3 @@ function updateDsrNetSaleRupees(petrolLiters, dieselLiters, isActive, petrolRate
   }
 }
 
-function formatCurrency(value) {
-  if (value === null || value === undefined) return "—";
-  if (Number.isNaN(Number(value))) return "—";
-  return "₹" + Number(value).toLocaleString("en-IN", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}

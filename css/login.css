@@ -1,0 +1,18 @@
+/* Login page only */
+
+.login-page {
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #0f172a, #1e293b);
+  color: #e2e8f0;
+}
+
+.login-page .card {
+  width: min(360px, 92vw);
+  text-align: center;
+}
+
+.login-page input,
+.login-page button {
+  width: 100%;
+}

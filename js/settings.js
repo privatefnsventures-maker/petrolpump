@@ -1,7 +1,23 @@
-/* global supabaseClient, requireAuth, applyRoleVisibility */
+/* global supabaseClient, requireAuth, applyRoleVisibility, AppCache, invalidateUserRoleCache, AppError */
+
+// Simple HTML escape for XSS prevention
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 
 document.addEventListener("DOMContentLoaded", async () => {
-  const auth = await requireAuth({ allowedRoles: ["admin"], onDenied: "dashboard.html" });
+  // Server-side role verification via check_page_access() function
+  // Even if user bypasses client-side checks, RLS policies block unauthorized access
+  const auth = await requireAuth({
+    allowedRoles: ["admin"],
+    onDenied: "dashboard.html",
+    pageName: "settings", // Triggers server-side access verification
+  });
   if (!auth) return;
   applyRoleVisibility(auth.role);
 
@@ -35,10 +51,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         .maybeSingle();
 
       if (staffError) {
-        if (errorEl) {
-          errorEl.textContent = staffError.message;
-          errorEl.classList.remove("hidden");
-        }
+        AppError.handle(staffError, { target: errorEl });
         return;
       }
 
@@ -57,29 +70,35 @@ document.addEventListener("DOMContentLoaded", async () => {
           password,
         });
         if (signupError && !isExistingUserError(signupError)) {
-          if (errorEl) {
-            errorEl.textContent = signupError.message;
-            errorEl.classList.remove("hidden");
-          }
+          AppError.handle(signupError, { target: errorEl });
           return;
         }
       }
 
-      const { error } = await supabaseClient.from("staff").upsert(
-        { email, role },
-        { onConflict: "email" }
-      );
+      // Use secure server-side function for staff management
+      // This validates admin role on the server regardless of client-side state
+      const { data, error } = await supabaseClient.rpc("upsert_staff", {
+        p_email: email,
+        p_role: role,
+      });
 
       if (error) {
-        if (errorEl) {
-          errorEl.textContent = error.message;
-          errorEl.classList.remove("hidden");
-        }
+        AppError.handle(error, { target: errorEl });
         return;
       }
 
       form.reset();
       successEl?.classList.remove("hidden");
+      
+      // Invalidate cached role for updated user
+      if (typeof invalidateUserRoleCache === "function") {
+        invalidateUserRoleCache(email);
+      }
+      // Invalidate staff list cache
+      if (typeof AppCache !== "undefined" && AppCache) {
+        AppCache.invalidateByType("staff_list");
+      }
+      
       loadStaffList();
     });
   }
@@ -98,7 +117,8 @@ async function loadStaffList() {
     .order("created_at", { ascending: false });
 
   if (error) {
-    tbody.innerHTML = `<tr><td colspan='3' class='error'>${error.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan='3' class='error'>${escapeHtml(AppError.getUserMessage(error))}</td></tr>`;
+    AppError.report(error, { context: "loadStaffList" });
     return;
   }
 
@@ -111,8 +131,8 @@ async function loadStaffList() {
   data.forEach((row) => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${row.email}</td>
-      <td>${row.role}</td>
+      <td>${escapeHtml(row.email)}</td>
+      <td>${escapeHtml(row.role)}</td>
       <td>${formatDate(row.created_at)}</td>
     `;
     tbody.appendChild(tr);

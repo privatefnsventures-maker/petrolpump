@@ -13,4 +13,6 @@ window.__APP_CONFIG__ = {
   SUPABASE_URL: "https://YOUR-PROJECT-ID.supabase.co",
   SUPABASE_ANON_KEY: "your-anon-key-here",
   APP_ENV: "staging",
+  // Optional: POST URL for centralized error reporting (e.g. Sentry, custom endpoint)
+  // ERROR_REPORT_URL: "https://your-error-reporting-endpoint.example.com/report",
 };
