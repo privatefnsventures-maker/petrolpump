@@ -102,19 +102,48 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 /**
+ * Verifies page access via server-side database function.
+ * This provides defense-in-depth beyond RLS policies.
+ *
+ * @param {string} pageName - The page identifier (e.g., 'settings', 'analysis')
+ * @returns {Promise<{allowed: boolean, role: string}|null>}
+ */
+async function verifyPageAccess(pageName) {
+  try {
+    const { data, error } = await supabaseClient.rpc("check_page_access", {
+      p_page: pageName,
+    });
+    if (error) {
+      console.error("Page access check failed:", error);
+      return null;
+    }
+    return data;
+  } catch (err) {
+    console.error("Page access verification error:", err);
+    return null;
+  }
+}
+
+/**
  * Redirects to the login page if there is no active Supabase session.
- * Supports optional role-based gating.
+ * Supports optional role-based gating with server-side verification.
+ *
+ * SECURITY NOTE: Client-side checks are for UX only. All data operations
+ * are protected by Row Level Security (RLS) policies in the database.
+ * Users can bypass UI restrictions but cannot bypass RLS.
  *
  * @param {Object} options
  * @param {string[]} [options.allowedRoles]
  * @param {string} [options.redirectTo] - Where to send unauthenticated users.
  * @param {string} [options.onDenied] - Where to send authenticated users without the required role.
+ * @param {string} [options.pageName] - Page identifier for server-side access verification.
  */
 async function requireAuth(options = {}) {
   const {
     allowedRoles = null,
     redirectTo = "index.html",
     onDenied = "credit.html",
+    pageName = null,
   } = options;
 
   const {
@@ -124,6 +153,22 @@ async function requireAuth(options = {}) {
   if (!session) {
     window.location.href = redirectTo;
     return null;
+  }
+
+  // Server-side verification (if pageName provided)
+  // This provides defense-in-depth - even if client-side is bypassed,
+  // the server validates access before any sensitive operations
+  if (pageName) {
+    const accessCheck = await verifyPageAccess(pageName);
+    if (accessCheck && !accessCheck.allowed) {
+      console.warn(`Access denied to ${pageName} for role: ${accessCheck.role}`);
+      window.location.href = onDenied;
+      return null;
+    }
+    // Use server-verified role if available
+    if (accessCheck?.role) {
+      return { session, role: accessCheck.role };
+    }
   }
 
   const role = await resolveRoleForSession(session);
@@ -138,6 +183,18 @@ async function requireAuth(options = {}) {
   return { session, role };
 }
 
+/**
+ * Applies role-based visibility to UI elements.
+ *
+ * SECURITY NOTE: This is for UX only, NOT security enforcement.
+ * Users can bypass this via browser dev tools, but they CANNOT bypass:
+ * - Row Level Security (RLS) policies on database tables
+ * - Server-side functions (upsert_staff, delete_staff, check_page_access)
+ *
+ * All sensitive operations are protected at the database level.
+ *
+ * @param {string} role - The user's role ('admin' or 'supervisor')
+ */
 function applyRoleVisibility(role) {
   document
     .querySelectorAll("[data-role='admin-only']")
@@ -152,3 +209,4 @@ window.requireAuth = requireAuth;
 window.resolveLandingByRole = resolveLanding;
 window.applyRoleVisibility = applyRoleVisibility;
 window.resolveRoleForSession = resolveRoleForSession;
+window.verifyPageAccess = verifyPageAccess;

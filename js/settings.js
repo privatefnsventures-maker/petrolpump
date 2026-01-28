@@ -1,7 +1,13 @@
 /* global supabaseClient, requireAuth, applyRoleVisibility */
 
 document.addEventListener("DOMContentLoaded", async () => {
-  const auth = await requireAuth({ allowedRoles: ["admin"], onDenied: "dashboard.html" });
+  // Server-side role verification via check_page_access() function
+  // Even if user bypasses client-side checks, RLS policies block unauthorized access
+  const auth = await requireAuth({
+    allowedRoles: ["admin"],
+    onDenied: "dashboard.html",
+    pageName: "settings", // Triggers server-side access verification
+  });
   if (!auth) return;
   applyRoleVisibility(auth.role);
 
@@ -65,14 +71,20 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
       }
 
-      const { error } = await supabaseClient.from("staff").upsert(
-        { email, role },
-        { onConflict: "email" }
-      );
+      // Use secure server-side function for staff management
+      // This validates admin role on the server regardless of client-side state
+      const { data, error } = await supabaseClient.rpc("upsert_staff", {
+        p_email: email,
+        p_role: role,
+      });
 
       if (error) {
         if (errorEl) {
-          errorEl.textContent = error.message;
+          // Show user-friendly error message
+          const message = error.message.includes("Access denied")
+            ? "You do not have permission to manage staff."
+            : error.message;
+          errorEl.textContent = message;
           errorEl.classList.remove("hidden");
         }
         return;
