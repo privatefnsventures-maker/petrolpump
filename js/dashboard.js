@@ -1,4 +1,4 @@
-/* global supabaseClient, requireAuth, applyRoleVisibility, formatCurrency, AppCache */
+/* global supabaseClient, requireAuth, applyRoleVisibility, formatCurrency, AppCache, AppError */
 
 // Simple HTML escape for XSS prevention
 function escapeHtml(str) {
@@ -144,7 +144,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     console.log("All dashboard initializations completed successfully");
     scheduleAutoFitStats();
   } catch (error) {
-    console.error("Error during dashboard initialization:", error);
+    AppError.handle(error, { context: { source: "dashboardInit" } });
   }
 });
 
@@ -281,7 +281,7 @@ async function loadTodaySales(dateStr) {
       .eq("date", selectedDate);
 
     if (error) {
-      console.error("DSR query error:", error);
+      AppError.report(error, { context: "loadTodaySales", date: selectedDate });
       return null;
     }
     return data ?? [];
@@ -436,7 +436,7 @@ async function loadCreditSummary(dateStr) {
       );
 
     if (error) {
-      console.error(error);
+      AppError.report(error, { context: "loadCreditSummary", date: selectedDate });
       return null;
     }
     return data ?? [];
@@ -518,8 +518,8 @@ async function loadRecentActivity() {
           .limit(4),
       ]);
 
-    if (dsrError) console.error(dsrError);
-    if (creditError) console.error(creditError);
+    if (dsrError) AppError.report(dsrError, { context: "loadRecentActivity", type: "dsr" });
+    if (creditError) AppError.report(creditError, { context: "loadRecentActivity", type: "credit" });
 
     return {
       dsrData: dsrData ?? [],
@@ -596,16 +596,16 @@ async function fetchDashboardData(startDate, endDate, onUpdate = null) {
 
   const fetchFn = async () => {
     try {
-      // Attempt to use the Edge Function for a single round-trip
-      const { data, error } = await supabaseClient.functions.invoke(
-        "get-dashboard-data",
-        {
-          body: { startDate, endDate },
-        }
+      // Attempt to use the Edge Function with retry for transient failures
+      const { data, error } = await AppError.withRetry(
+        () =>
+          supabaseClient.functions.invoke("get-dashboard-data", {
+            body: { startDate, endDate },
+          }),
+        { maxAttempts: 3 }
       );
 
       if (error) {
-        console.warn("Edge Function unavailable, falling back to parallel queries:", error.message);
         throw error;
       }
 
@@ -696,9 +696,9 @@ function renderDsrSummary(data, elements) {
 
   const { dsrData, stockData, expenseData, dsrError, stockError, expenseError } = data || {};
 
-  if (dsrError) console.error(dsrError);
-  if (stockError) console.error(stockError);
-  if (expenseError) console.error(expenseError);
+  if (dsrError) AppError.report(dsrError, { context: "renderDsrSummary", type: "dsr" });
+  if (stockError) AppError.report(stockError, { context: "renderDsrSummary", type: "stock" });
+  if (expenseError) AppError.report(expenseError, { context: "renderDsrSummary", type: "expense" });
 
   const hasDsr = !dsrError;
   const hasStock = !stockError;
@@ -959,8 +959,8 @@ async function loadProfitLossSummary(range) {
       .lte("date", range.end),
   ]);
 
-  if (dsrError) console.error(dsrError);
-  if (expenseError) console.error(expenseError);
+  if (dsrError) AppError.report(dsrError, { context: "profitLossSummary", type: "dsr" });
+  if (expenseError) AppError.report(expenseError, { context: "profitLossSummary", type: "expense" });
 
   const hasDsr = !dsrError;
   const hasExpense = !expenseError;

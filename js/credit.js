@@ -1,4 +1,4 @@
-/* global supabaseClient, requireAuth, applyRoleVisibility, formatCurrency, AppCache */
+/* global supabaseClient, requireAuth, applyRoleVisibility, formatCurrency, AppCache, AppError */
 
 // Pagination state
 const PAGE_SIZE = 25;
@@ -57,10 +57,7 @@ async function handleCreditSubmit(event, currentUserId) {
     .insert(payload);
 
   if (error) {
-    if (errorEl) {
-      errorEl.textContent = error.message;
-      errorEl.classList.remove("hidden");
-    }
+    AppError.handle(error, { target: errorEl });
     return;
   }
 
@@ -159,8 +156,9 @@ async function loadCreditLedger(reset = false) {
 
     if (error) {
       if (reset) {
-        tbody.innerHTML = `<tr><td colspan="6" class="error">${error.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="error">${escapeHtml(AppError.getUserMessage(error))}</td></tr>`;
       }
+      AppError.report(error, { context: "loadCreditLedger" });
       creditPagination.isLoading = false;
       updatePaginationUI();
       return;
@@ -211,10 +209,10 @@ async function loadCreditLedger(reset = false) {
     });
 
   } catch (err) {
-    console.error("Error loading credit ledger:", err);
     if (reset) {
-      tbody.innerHTML = `<tr><td colspan="6" class="error">Failed to load data</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" class="error">${escapeHtml(AppError.getUserMessage(err))}</td></tr>`;
     }
+    AppError.report(err, { context: "loadCreditLedger" });
   } finally {
     creditPagination.isLoading = false;
     updatePaginationUI();
@@ -276,7 +274,7 @@ document.addEventListener("click", async (e) => {
     .eq("id", id)
     .single();
   if (fetchErr || !currentRow) {
-    msg.textContent = fetchErr?.message || "Record not found";
+    msg.textContent = AppError.getUserMessage(fetchErr || new Error("Record not found"));
     return;
   }
 
@@ -296,8 +294,8 @@ document.addEventListener("click", async (e) => {
   console.debug("settle update result", { id, updatedRows, updateErr });
 
   if (updateErr) {
-    msg.textContent = updateErr.message;
-    console.error("Failed to update credit_customers:", updateErr);
+    msg.textContent = AppError.getUserMessage(updateErr);
+    AppError.report(updateErr, { context: "creditSettle" });
     return;
   }
   // update row in-place and show whether fully settled
@@ -381,9 +379,9 @@ document.addEventListener("click", async (e) => {
     if (msg) {
       msg.classList.remove("muted");
       msg.classList.add("error");
-      msg.textContent = error.message;
+      msg.textContent = AppError.getUserMessage(error);
     }
-    console.error("Failed to delete credit entry:", error);
+    AppError.report(error, { context: "creditDelete" });
     return;
   }
 

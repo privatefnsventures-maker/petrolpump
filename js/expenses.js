@@ -1,4 +1,4 @@
-/* global supabaseClient, requireAuth, applyRoleVisibility, formatCurrency */
+/* global supabaseClient, requireAuth, applyRoleVisibility, formatCurrency, AppError */
 
 // Simple HTML escape for XSS prevention
 function escapeHtml(str) {
@@ -66,10 +66,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       const { error } = await supabaseClient.from("expenses").insert(payload);
 
       if (error) {
-        if (errorEl) {
-          errorEl.textContent = error.message;
-          errorEl.classList.remove("hidden");
-        }
+        AppError.handle(error, { target: errorEl });
         return;
       }
 
@@ -165,8 +162,9 @@ async function loadExpenses(reset = false) {
 
     if (error) {
       if (reset) {
-        tbody.innerHTML = `<tr><td colspan='4' class='error'>${error.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan='4' class='error'>${escapeHtml(AppError.getUserMessage(error))}</td></tr>`;
       }
+      AppError.report(error, { context: "loadExpenses" });
       expensesPagination.isLoading = false;
       updateExpensesPaginationUI();
       return;
@@ -203,10 +201,10 @@ async function loadExpenses(reset = false) {
     });
 
   } catch (err) {
-    console.error("Error loading expenses:", err);
     if (reset) {
-      tbody.innerHTML = `<tr><td colspan="4" class="error">Failed to load data</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="4" class="error">${escapeHtml(AppError.getUserMessage(err))}</td></tr>`;
     }
+    AppError.report(err, { context: "loadExpenses" });
   } finally {
     expensesPagination.isLoading = false;
     updateExpensesPaginationUI();

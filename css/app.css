@@ -268,3 +268,36 @@ tbody tr:hover {
     padding: 0.55rem 0.45rem;
   }
 }
+
+/* Global error banner (centralized error handling) */
+.app-error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: #fef2f2;
+  color: #991b1b;
+  border-bottom: 1px solid #fecaca;
+  font-size: 0.9rem;
+}
+
+.app-error-banner.hidden {
+  display: none;
+}
+
+.app-error-banner-close {
+  flex-shrink: 0;
+  padding: 0.25rem 0.5rem;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.app-error-banner-close:hover {
+  background: rgba(0, 0, 0, 0.06);
+}

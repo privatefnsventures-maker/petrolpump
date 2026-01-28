@@ -1,4 +1,4 @@
-/* global supabaseClient, requireAuth, applyRoleVisibility, AppCache, invalidateUserRoleCache */
+/* global supabaseClient, requireAuth, applyRoleVisibility, AppCache, invalidateUserRoleCache, AppError */
 
 // Simple HTML escape for XSS prevention
 function escapeHtml(str) {
@@ -51,10 +51,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         .maybeSingle();
 
       if (staffError) {
-        if (errorEl) {
-          errorEl.textContent = staffError.message;
-          errorEl.classList.remove("hidden");
-        }
+        AppError.handle(staffError, { target: errorEl });
         return;
       }
 
@@ -73,10 +70,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           password,
         });
         if (signupError && !isExistingUserError(signupError)) {
-          if (errorEl) {
-            errorEl.textContent = signupError.message;
-            errorEl.classList.remove("hidden");
-          }
+          AppError.handle(signupError, { target: errorEl });
           return;
         }
       }
@@ -89,14 +83,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       });
 
       if (error) {
-        if (errorEl) {
-          // Show user-friendly error message
-          const message = error.message.includes("Access denied")
-            ? "You do not have permission to manage staff."
-            : error.message;
-          errorEl.textContent = message;
-          errorEl.classList.remove("hidden");
-        }
+        AppError.handle(error, { target: errorEl });
         return;
       }
 
@@ -130,7 +117,8 @@ async function loadStaffList() {
     .order("created_at", { ascending: false });
 
   if (error) {
-    tbody.innerHTML = `<tr><td colspan='3' class='error'>${error.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan='3' class='error'>${escapeHtml(AppError.getUserMessage(error))}</td></tr>`;
+    AppError.report(error, { context: "loadStaffList" });
     return;
   }
 

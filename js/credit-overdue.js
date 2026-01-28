@@ -1,4 +1,4 @@
-/* global supabaseClient, requireAuth, applyRoleVisibility, formatCurrency */
+/* global supabaseClient, requireAuth, applyRoleVisibility, formatCurrency, AppError */
 
 // Simple HTML escape for XSS prevention
 function escapeHtml(str) {
@@ -132,9 +132,10 @@ async function loadOpenCredit(dateStr, reset = false) {
 
     if (error) {
       if (reset) {
-        tbody.innerHTML = `<tr><td colspan="5" class="error">${error.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" class="error">${escapeHtml(AppError.getUserMessage(error))}</td></tr>`;
         if (summary) summary.textContent = "Unable to load.";
       }
+      AppError.report(error, { context: "loadOpenCredit" });
       overduePagination.isLoading = false;
       updateOverduePaginationUI();
       return;
@@ -210,11 +211,11 @@ async function loadOpenCredit(dateStr, reset = false) {
     }
 
   } catch (err) {
-    console.error("Error loading open credit:", err);
     if (reset) {
-      tbody.innerHTML = `<tr><td colspan="5" class="error">Failed to load data</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="5" class="error">${escapeHtml(AppError.getUserMessage(err))}</td></tr>`;
       if (summary) summary.textContent = "Unable to load.";
     }
+    AppError.report(err, { context: "loadOpenCredit" });
   } finally {
     overduePagination.isLoading = false;
     updateOverduePaginationUI();

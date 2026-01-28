@@ -1,4 +1,4 @@
-/* global supabaseClient, requireAuth, applyRoleVisibility */
+/* global supabaseClient, requireAuth, applyRoleVisibility, AppError */
 
 // Simple HTML escape for XSS prevention
 function escapeHtml(str) {
@@ -142,10 +142,7 @@ function initReadingForm(product) {
     const { error } = await supabaseClient.from("dsr").insert(payload);
 
     if (error) {
-      if (errorEl) {
-        errorEl.textContent = error.message;
-        errorEl.classList.remove("hidden");
-      }
+      AppError.handle(error, { target: errorEl });
       return;
     }
 
@@ -195,10 +192,7 @@ function initStockForm(product) {
     const { error } = await supabaseClient.from("dsr_stock").insert(payload);
 
     if (error) {
-      if (errorEl) {
-        errorEl.textContent = error.message;
-        errorEl.classList.remove("hidden");
-      }
+      AppError.handle(error, { target: errorEl });
       return;
     }
 
@@ -297,8 +291,9 @@ async function loadReadingHistory(product, reset = false) {
 
     if (error) {
       if (reset) {
-        tbody.innerHTML = `<tr><td colspan='${colCount}' class='error'>${error.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan='${colCount}' class='error'>${escapeHtml(AppError.getUserMessage(error))}</td></tr>`;
       }
+      AppError.report(error, { context: "loadReadingHistory", product });
       pagination.isLoading = false;
       updateDsrPaginationUI(product);
       return;
@@ -342,11 +337,11 @@ async function loadReadingHistory(product, reset = false) {
     });
 
   } catch (err) {
-    console.error(`Error loading ${product} reading history:`, err);
     if (reset) {
       const errColCount = 7 + (PUMP_CONFIG[product] || PUMP_CONFIG.petrol).pumps;
-      tbody.innerHTML = `<tr><td colspan="${errColCount}" class="error">Failed to load data</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="${errColCount}" class="error">${escapeHtml(AppError.getUserMessage(err))}</td></tr>`;
     }
+    AppError.report(err, { context: "loadReadingHistory", product });
   } finally {
     pagination.isLoading = false;
     updateDsrPaginationUI(product);
@@ -471,8 +466,9 @@ async function loadStockHistory(product, reset = false) {
 
     if (error) {
       if (reset) {
-        tbody.innerHTML = `<tr><td colspan='11' class='error'>${error.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan='11' class='error'>${escapeHtml(AppError.getUserMessage(error))}</td></tr>`;
       }
+      AppError.report(error, { context: "loadStockHistory", product });
       pagination.isLoading = false;
       updateStockPaginationUI(product);
       return;
@@ -516,10 +512,10 @@ async function loadStockHistory(product, reset = false) {
     });
 
   } catch (err) {
-    console.error(`Error loading ${product} stock history:`, err);
     if (reset) {
-      tbody.innerHTML = `<tr><td colspan="11" class="error">Failed to load data</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="11" class="error">${escapeHtml(AppError.getUserMessage(err))}</td></tr>`;
     }
+    AppError.report(err, { context: "loadStockHistory", product });
   } finally {
     pagination.isLoading = false;
     updateStockPaginationUI(product);

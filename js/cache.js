@@ -268,7 +268,11 @@ const AppCache = (function () {
       }
       return freshData;
     } catch (err) {
-      console.error("Fetch failed with no cached fallback:", key, err);
+      if (typeof window.AppError !== "undefined" && window.AppError.report) {
+        window.AppError.report(err, { context: "AppCache.getWithSWR", key });
+      } else {
+        console.error("Fetch failed with no cached fallback:", key, err);
+      }
       throw err;
     }
   }

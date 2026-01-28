@@ -1,4 +1,4 @@
-/* global supabaseClient, AppCache */
+/* global supabaseClient, AppCache, AppError */
 
 const loginForm = document.getElementById("login-form");
 const loginError = document.getElementById("login-error");
@@ -62,7 +62,7 @@ async function fetchRoleFromStaff(email) {
       .eq("email", email)
       .maybeSingle();
     if (error) {
-      console.error(error);
+      AppError.report(error, { context: "fetchRoleFromStaff" });
       return null;
     }
     return data?.role ?? null;
@@ -110,10 +110,7 @@ if (loginForm) {
     if (loginButton) loginButton.disabled = false;
 
     if (error) {
-      if (loginError) {
-        loginError.textContent = error.message;
-        loginError.classList.remove("hidden");
-      }
+      AppError.handle(error, { target: loginError });
       return;
     }
 
@@ -160,12 +157,12 @@ async function verifyPageAccess(pageName) {
       p_page: pageName,
     });
     if (error) {
-      console.error("Page access check failed:", error);
+      AppError.report(error, { context: "verifyPageAccess", pageName });
       return null;
     }
     return data;
   } catch (err) {
-    console.error("Page access verification error:", err);
+    AppError.report(err, { context: "verifyPageAccess", pageName });
     return null;
   }
 }
