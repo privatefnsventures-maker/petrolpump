@@ -1,5 +1,14 @@
 /* global supabaseClient, requireAuth, applyRoleVisibility, formatCurrency */
 
+// Pagination state
+const PAGE_SIZE = 25;
+let creditPagination = {
+  offset: 0,
+  hasMore: true,
+  totalCount: 0,
+  isLoading: false,
+};
+
 document.addEventListener("DOMContentLoaded", async () => {
   const auth = await requireAuth({ allowedRoles: ["admin", "supervisor"] });
   if (!auth) return;
@@ -15,7 +24,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     );
   }
 
-  loadCreditLedger();
+  // Initialize pagination controls
+  initPaginationControls();
+  
+  loadCreditLedger(true); // Initial load with reset
 });
 
 async function handleCreditSubmit(event, currentUserId) {
@@ -54,7 +66,7 @@ async function handleCreditSubmit(event, currentUserId) {
 
   form.reset();
   successEl?.classList.remove("hidden");
-  loadCreditLedger();
+  loadCreditLedger(true); // Reset pagination to show new entry at top
   try {
     localStorage.setItem("credit-updated", String(Date.now()));
   } catch (e) {
@@ -62,52 +74,174 @@ async function handleCreditSubmit(event, currentUserId) {
   }
 }
 
-async function loadCreditLedger() {
+/**
+ * Initialize pagination controls (load more button and info display)
+ */
+function initPaginationControls() {
+  const tableSection = document.querySelector("section.card:has(#credit-table-body)");
+  if (!tableSection) return;
+
+  // Check if pagination controls already exist
+  if (tableSection.querySelector(".pagination-controls")) return;
+
+  // Create pagination controls container
+  const paginationDiv = document.createElement("div");
+  paginationDiv.className = "pagination-controls";
+  paginationDiv.innerHTML = `
+    <div class="pagination-info">
+      <span id="credit-pagination-info" class="muted"></span>
+    </div>
+    <button id="credit-load-more" class="button-secondary hidden">Load more</button>
+  `;
+  tableSection.appendChild(paginationDiv);
+
+  // Attach load more handler
+  const loadMoreBtn = document.getElementById("credit-load-more");
+  if (loadMoreBtn) {
+    loadMoreBtn.addEventListener("click", () => loadCreditLedger(false));
+  }
+}
+
+/**
+ * Load credit ledger with pagination support
+ * @param {boolean} reset - If true, resets pagination and clears existing data
+ */
+async function loadCreditLedger(reset = false) {
   const tbody = document.getElementById("credit-table-body");
+  const loadMoreBtn = document.getElementById("credit-load-more");
+  const paginationInfo = document.getElementById("credit-pagination-info");
+  
   if (!tbody) return;
-  tbody.innerHTML = "<tr><td colspan='6' class='muted'>Fetching credit ledger…</td></tr>";
+  
+  // Prevent duplicate requests
+  if (creditPagination.isLoading) return;
+  creditPagination.isLoading = true;
 
-  const { data, error } = await supabaseClient
-    .from("credit_customers")
-    .select("id, customer_name, vehicle_no, amount_due, last_payment, notes")
-    .order("created_at", { ascending: false })
-    .limit(25);
-
-  if (error) {
-    tbody.innerHTML = `<tr><td colspan="6" class="error">${error.message}</td></tr>`;
-    return;
+  // Reset pagination state if needed
+  if (reset) {
+    creditPagination.offset = 0;
+    creditPagination.hasMore = true;
+    creditPagination.totalCount = 0;
+    tbody.innerHTML = "<tr><td colspan='6' class='muted'>Fetching credit ledger…</td></tr>";
   }
 
-  if (!data?.length) {
-    tbody.innerHTML = "<tr><td colspan='6' class='muted'>No credit customers recorded yet.</td></tr>";
-    return;
+  // Update button state
+  if (loadMoreBtn) {
+    loadMoreBtn.disabled = true;
+    loadMoreBtn.textContent = "Loading…";
   }
 
-  tbody.innerHTML = "";
-  data.forEach((row) => {
-    const tr = document.createElement("tr");
-    const actionHtml = Number(row.amount_due) > 0
-      ? `<div class="settle-inline">
-           <input type="number" min="0" step="0.01" class="settle-amount" placeholder="0.00" />
-           <button class="settle-confirm" data-id="${row.id}">Settle</button>
-           <span class="settle-msg muted" aria-hidden="true"></span>
-         </div>`
-      : `<div class="settle-inline">
-           <span class="muted">Cleared</span>
-           <button class="delete-entry" data-id="${row.id}" title="Delete settled entry">Delete</button>
-           <span class="settle-msg muted" aria-hidden="true"></span>
-         </div>`;
+  try {
+    // Fetch total count (only on reset/initial load)
+    if (reset) {
+      const { count, error: countError } = await supabaseClient
+        .from("credit_customers")
+        .select("*", { count: "exact", head: true });
+      
+      if (!countError) {
+        creditPagination.totalCount = count || 0;
+      }
+    }
 
-    tr.innerHTML = `
-      <td>${escapeHtml(row.customer_name)}</td>
-      <td>${escapeHtml(row.vehicle_no ?? "—")}</td>
-      <td data-amount="${row.amount_due}">${formatCurrency(row.amount_due)}</td>
-      <td>${row.last_payment ?? "—"}</td>
-      <td>${escapeHtml(row.notes ?? "—")}</td>
-      <td>${actionHtml}</td>
-    `;
-    tbody.appendChild(tr);
-  });
+    // Fetch data with pagination using range
+    const { data, error } = await supabaseClient
+      .from("credit_customers")
+      .select("id, customer_name, vehicle_no, amount_due, last_payment, notes")
+      .order("created_at", { ascending: false })
+      .range(creditPagination.offset, creditPagination.offset + PAGE_SIZE - 1);
+
+    if (error) {
+      if (reset) {
+        tbody.innerHTML = `<tr><td colspan="6" class="error">${error.message}</td></tr>`;
+      }
+      creditPagination.isLoading = false;
+      updatePaginationUI();
+      return;
+    }
+
+    // Update pagination state
+    const fetchedCount = data?.length || 0;
+    creditPagination.offset += fetchedCount;
+    creditPagination.hasMore = fetchedCount === PAGE_SIZE;
+
+    // Handle empty data
+    if (reset && !fetchedCount) {
+      tbody.innerHTML = "<tr><td colspan='6' class='muted'>No credit customers recorded yet.</td></tr>";
+      creditPagination.isLoading = false;
+      updatePaginationUI();
+      return;
+    }
+
+    // Clear loading message on initial load
+    if (reset) {
+      tbody.innerHTML = "";
+    }
+
+    // Append rows
+    data.forEach((row) => {
+      const tr = document.createElement("tr");
+      const actionHtml = Number(row.amount_due) > 0
+        ? `<div class="settle-inline">
+             <input type="number" min="0" step="0.01" class="settle-amount" placeholder="0.00" />
+             <button class="settle-confirm" data-id="${row.id}">Settle</button>
+             <span class="settle-msg muted" aria-hidden="true"></span>
+           </div>`
+        : `<div class="settle-inline">
+             <span class="muted">Cleared</span>
+             <button class="delete-entry" data-id="${row.id}" title="Delete settled entry">Delete</button>
+             <span class="settle-msg muted" aria-hidden="true"></span>
+           </div>`;
+
+      tr.innerHTML = `
+        <td>${escapeHtml(row.customer_name)}</td>
+        <td>${escapeHtml(row.vehicle_no ?? "—")}</td>
+        <td data-amount="${row.amount_due}">${formatCurrency(row.amount_due)}</td>
+        <td>${row.last_payment ?? "—"}</td>
+        <td>${escapeHtml(row.notes ?? "—")}</td>
+        <td>${actionHtml}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+  } catch (err) {
+    console.error("Error loading credit ledger:", err);
+    if (reset) {
+      tbody.innerHTML = `<tr><td colspan="6" class="error">Failed to load data</td></tr>`;
+    }
+  } finally {
+    creditPagination.isLoading = false;
+    updatePaginationUI();
+  }
+}
+
+/**
+ * Update pagination UI elements (info text and load more button)
+ */
+function updatePaginationUI() {
+  const loadMoreBtn = document.getElementById("credit-load-more");
+  const paginationInfo = document.getElementById("credit-pagination-info");
+  
+  // Update info text
+  if (paginationInfo) {
+    if (creditPagination.totalCount > 0) {
+      const showing = Math.min(creditPagination.offset, creditPagination.totalCount);
+      paginationInfo.textContent = `Showing ${showing} of ${creditPagination.totalCount} entries`;
+    } else {
+      paginationInfo.textContent = "";
+    }
+  }
+
+  // Update load more button
+  if (loadMoreBtn) {
+    loadMoreBtn.disabled = false;
+    loadMoreBtn.textContent = "Load more";
+    
+    if (creditPagination.hasMore && creditPagination.offset > 0) {
+      loadMoreBtn.classList.remove("hidden");
+    } else {
+      loadMoreBtn.classList.add("hidden");
+    }
+  }
 }
 
 // Handle inline settle confirm clicks
@@ -246,6 +380,13 @@ document.addEventListener("click", async (e) => {
     return;
   }
 
+  // Update pagination count
+  if (creditPagination.totalCount > 0) {
+    creditPagination.totalCount -= 1;
+    creditPagination.offset = Math.max(0, creditPagination.offset - 1);
+    updatePaginationUI();
+  }
+
   // Remove the row from the table
   if (tr) {
     tr.style.transition = "opacity 0.3s ease";
@@ -256,6 +397,8 @@ document.addEventListener("click", async (e) => {
       const tbody = document.getElementById("credit-table-body");
       if (tbody && tbody.querySelectorAll("tr").length === 0) {
         tbody.innerHTML = "<tr><td colspan='6' class='muted'>No credit customers recorded yet.</td></tr>";
+        creditPagination.hasMore = false;
+        updatePaginationUI();
       }
     }, 300);
   }

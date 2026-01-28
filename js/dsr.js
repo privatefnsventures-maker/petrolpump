@@ -13,6 +13,17 @@ function escapeHtml(str) {
 const PRODUCTS = ["petrol", "diesel"];
 let currentUserId = null;
 
+// Pagination configuration and state
+const DSR_PAGE_SIZE = 10;
+const dsrPagination = {
+  petrol: { offset: 0, hasMore: true, totalCount: 0, isLoading: false },
+  diesel: { offset: 0, hasMore: true, totalCount: 0, isLoading: false },
+};
+const stockPagination = {
+  petrol: { offset: 0, hasMore: true, totalCount: 0, isLoading: false },
+  diesel: { offset: 0, hasMore: true, totalCount: 0, isLoading: false },
+};
+
 const readingNumberFields = [
   "opening_pump1_nozzle1",
   "opening_pump1_nozzle2",
@@ -55,8 +66,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   PRODUCTS.forEach((product) => {
     initReadingForm(product);
     initStockForm(product);
-    loadReadingHistory(product);
-    loadStockHistory(product);
+    initDsrPaginationControls(product);
+    initStockPaginationControls(product);
+    loadReadingHistory(product, true);
+    loadStockHistory(product, true);
   });
 });
 
@@ -123,7 +136,7 @@ function initReadingForm(product) {
     form.reset();
     setDefaultDate(form);
     successEl?.classList.remove("hidden");
-    loadReadingHistory(product);
+    loadReadingHistory(product, true); // Reset pagination to show new entry
   });
 }
 
@@ -176,99 +189,350 @@ function initStockForm(product) {
     form.reset();
     setDefaultDate(form);
     successEl?.classList.remove("hidden");
-    loadStockHistory(product);
+    loadStockHistory(product, true); // Reset pagination to show new entry
   });
 }
 
-async function loadReadingHistory(product) {
+/**
+ * Initialize pagination controls for DSR reading history table
+ */
+function initDsrPaginationControls(product) {
+  const historySection = document.querySelector(`#dsr-table-${product}`)?.closest(".dsr-history");
+  if (!historySection) return;
+
+  // Check if pagination controls already exist
+  if (historySection.querySelector(".pagination-controls")) return;
+
+  // Create pagination controls container
+  const paginationDiv = document.createElement("div");
+  paginationDiv.className = "pagination-controls";
+  paginationDiv.innerHTML = `
+    <div class="pagination-info">
+      <span id="dsr-pagination-info-${product}" class="muted"></span>
+    </div>
+    <button id="dsr-load-more-${product}" class="button-secondary hidden">Load more</button>
+  `;
+  historySection.appendChild(paginationDiv);
+
+  // Attach load more handler
+  const loadMoreBtn = document.getElementById(`dsr-load-more-${product}`);
+  if (loadMoreBtn) {
+    loadMoreBtn.addEventListener("click", () => loadReadingHistory(product, false));
+  }
+}
+
+/**
+ * Load reading history with pagination support
+ * @param {string} product - Product type (petrol/diesel)
+ * @param {boolean} reset - If true, resets pagination and clears existing data
+ */
+async function loadReadingHistory(product, reset = false) {
   const tbody = document.getElementById(`dsr-table-${product}`);
+  const loadMoreBtn = document.getElementById(`dsr-load-more-${product}`);
+  const paginationInfo = document.getElementById(`dsr-pagination-info-${product}`);
+  const pagination = dsrPagination[product];
+  
   if (!tbody) return;
-  tbody.innerHTML =
-    "<tr><td colspan='9' class='muted'>Loading recent readings…</td></tr>";
+  
+  // Prevent duplicate requests
+  if (pagination.isLoading) return;
+  pagination.isLoading = true;
 
-  const { data, error } = await supabaseClient
-    .from("dsr")
-    .select(
-      "date, sales_pump1, sales_pump2, total_sales, testing, dip_reading, stock, petrol_rate, diesel_rate, remarks"
-    )
-    .eq("product", product)
-    .order("date", { ascending: false })
-    .limit(10);
-
-  if (error) {
-    tbody.innerHTML = `<tr><td colspan='9' class='error'>${error.message}</td></tr>`;
-    return;
+  // Reset pagination state if needed
+  if (reset) {
+    pagination.offset = 0;
+    pagination.hasMore = true;
+    pagination.totalCount = 0;
+    tbody.innerHTML = "<tr><td colspan='9' class='muted'>Loading recent readings…</td></tr>";
   }
 
-  if (!data?.length) {
-    tbody.innerHTML =
-      "<tr><td colspan='9' class='muted'>No readings saved yet.</td></tr>";
-    return;
+  // Update button state
+  if (loadMoreBtn) {
+    loadMoreBtn.disabled = true;
+    loadMoreBtn.textContent = "Loading…";
   }
 
-  tbody.innerHTML = "";
-  data.forEach((row) => {
-    const tr = document.createElement("tr");
-    const rate = product === "petrol" ? row.petrol_rate : row.diesel_rate;
-    tr.innerHTML = `
-      <td>${row.date}</td>
-      <td>${formatQuantity(row.sales_pump1)}</td>
-      <td>${formatQuantity(row.sales_pump2)}</td>
-      <td>${formatQuantity(row.total_sales)}</td>
-      <td>${formatQuantity(row.testing)}</td>
-      <td>${formatQuantity(row.dip_reading)}</td>
-      <td>${formatQuantity(row.stock)}</td>
-      <td>${rate ? formatCurrency(rate) : "—"}</td>
-      <td>${escapeHtml(row.remarks ?? "—")}</td>
-    `;
-    tbody.appendChild(tr);
-  });
+  try {
+    // Fetch total count (only on reset/initial load)
+    if (reset) {
+      const { count, error: countError } = await supabaseClient
+        .from("dsr")
+        .select("*", { count: "exact", head: true })
+        .eq("product", product);
+      
+      if (!countError) {
+        pagination.totalCount = count || 0;
+      }
+    }
+
+    // Fetch data with pagination using range
+    const { data, error } = await supabaseClient
+      .from("dsr")
+      .select(
+        "date, sales_pump1, sales_pump2, total_sales, testing, dip_reading, stock, petrol_rate, diesel_rate, remarks"
+      )
+      .eq("product", product)
+      .order("date", { ascending: false })
+      .range(pagination.offset, pagination.offset + DSR_PAGE_SIZE - 1);
+
+    if (error) {
+      if (reset) {
+        tbody.innerHTML = `<tr><td colspan='9' class='error'>${error.message}</td></tr>`;
+      }
+      pagination.isLoading = false;
+      updateDsrPaginationUI(product);
+      return;
+    }
+
+    // Update pagination state
+    const fetchedCount = data?.length || 0;
+    pagination.offset += fetchedCount;
+    pagination.hasMore = fetchedCount === DSR_PAGE_SIZE;
+
+    // Handle empty data
+    if (reset && !fetchedCount) {
+      tbody.innerHTML = "<tr><td colspan='9' class='muted'>No readings saved yet.</td></tr>";
+      pagination.isLoading = false;
+      updateDsrPaginationUI(product);
+      return;
+    }
+
+    // Clear loading message on initial load
+    if (reset) {
+      tbody.innerHTML = "";
+    }
+
+    // Append rows
+    data.forEach((row) => {
+      const tr = document.createElement("tr");
+      const rate = product === "petrol" ? row.petrol_rate : row.diesel_rate;
+      tr.innerHTML = `
+        <td>${row.date}</td>
+        <td>${formatQuantity(row.sales_pump1)}</td>
+        <td>${formatQuantity(row.sales_pump2)}</td>
+        <td>${formatQuantity(row.total_sales)}</td>
+        <td>${formatQuantity(row.testing)}</td>
+        <td>${formatQuantity(row.dip_reading)}</td>
+        <td>${formatQuantity(row.stock)}</td>
+        <td>${rate ? formatCurrency(rate) : "—"}</td>
+        <td>${escapeHtml(row.remarks ?? "—")}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+  } catch (err) {
+    console.error(`Error loading ${product} reading history:`, err);
+    if (reset) {
+      tbody.innerHTML = `<tr><td colspan="9" class="error">Failed to load data</td></tr>`;
+    }
+  } finally {
+    pagination.isLoading = false;
+    updateDsrPaginationUI(product);
+  }
 }
 
-async function loadStockHistory(product) {
+/**
+ * Update pagination UI elements for DSR reading history
+ */
+function updateDsrPaginationUI(product) {
+  const loadMoreBtn = document.getElementById(`dsr-load-more-${product}`);
+  const paginationInfo = document.getElementById(`dsr-pagination-info-${product}`);
+  const pagination = dsrPagination[product];
+  
+  // Update info text
+  if (paginationInfo) {
+    if (pagination.totalCount > 0) {
+      const showing = Math.min(pagination.offset, pagination.totalCount);
+      paginationInfo.textContent = `Showing ${showing} of ${pagination.totalCount} entries`;
+    } else {
+      paginationInfo.textContent = "";
+    }
+  }
+
+  // Update load more button
+  if (loadMoreBtn) {
+    loadMoreBtn.disabled = false;
+    loadMoreBtn.textContent = "Load more";
+    
+    if (pagination.hasMore && pagination.offset > 0) {
+      loadMoreBtn.classList.remove("hidden");
+    } else {
+      loadMoreBtn.classList.add("hidden");
+    }
+  }
+}
+
+/**
+ * Initialize pagination controls for stock history table
+ */
+function initStockPaginationControls(product) {
   const tbody = document.getElementById(`stock-table-${product}`);
   if (!tbody) return;
-  tbody.innerHTML =
-    "<tr><td colspan='11' class='muted'>Loading stock entries…</td></tr>";
+  
+  const historySection = tbody.closest(".dsr-history") || tbody.closest(".table-scroll")?.parentElement;
+  if (!historySection) return;
 
-  const { data, error } = await supabaseClient
-    .from("dsr_stock")
-    .select(
-      "date, opening_stock, receipts, total_stock, sale_from_meter, testing, net_sale, closing_stock, dip_stock, variation, remark"
-    )
-    .eq("product", product)
-    .order("date", { ascending: false })
-    .limit(10);
+  // Check if pagination controls already exist
+  if (historySection.querySelector(".pagination-controls")) return;
 
-  if (error) {
-    tbody.innerHTML = `<tr><td colspan='11' class='error'>${error.message}</td></tr>`;
-    return;
+  // Create pagination controls container
+  const paginationDiv = document.createElement("div");
+  paginationDiv.className = "pagination-controls";
+  paginationDiv.innerHTML = `
+    <div class="pagination-info">
+      <span id="stock-pagination-info-${product}" class="muted"></span>
+    </div>
+    <button id="stock-load-more-${product}" class="button-secondary hidden">Load more</button>
+  `;
+  historySection.appendChild(paginationDiv);
+
+  // Attach load more handler
+  const loadMoreBtn = document.getElementById(`stock-load-more-${product}`);
+  if (loadMoreBtn) {
+    loadMoreBtn.addEventListener("click", () => loadStockHistory(product, false));
+  }
+}
+
+/**
+ * Load stock history with pagination support
+ * @param {string} product - Product type (petrol/diesel)
+ * @param {boolean} reset - If true, resets pagination and clears existing data
+ */
+async function loadStockHistory(product, reset = false) {
+  const tbody = document.getElementById(`stock-table-${product}`);
+  const loadMoreBtn = document.getElementById(`stock-load-more-${product}`);
+  const paginationInfo = document.getElementById(`stock-pagination-info-${product}`);
+  const pagination = stockPagination[product];
+  
+  if (!tbody) return;
+  
+  // Prevent duplicate requests
+  if (pagination.isLoading) return;
+  pagination.isLoading = true;
+
+  // Reset pagination state if needed
+  if (reset) {
+    pagination.offset = 0;
+    pagination.hasMore = true;
+    pagination.totalCount = 0;
+    tbody.innerHTML = "<tr><td colspan='11' class='muted'>Loading stock entries…</td></tr>";
   }
 
-  if (!data?.length) {
-    tbody.innerHTML =
-      "<tr><td colspan='11' class='muted'>No stock records yet.</td></tr>";
-    return;
+  // Update button state
+  if (loadMoreBtn) {
+    loadMoreBtn.disabled = true;
+    loadMoreBtn.textContent = "Loading…";
   }
 
-  tbody.innerHTML = "";
-  data.forEach((row) => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${row.date}</td>
-      <td>${formatQuantity(row.opening_stock)}</td>
-      <td>${formatQuantity(row.receipts)}</td>
-      <td>${formatQuantity(row.total_stock)}</td>
-      <td>${formatQuantity(row.sale_from_meter)}</td>
-      <td>${formatQuantity(row.testing)}</td>
-      <td>${formatQuantity(row.net_sale)}</td>
-      <td>${formatQuantity(row.closing_stock)}</td>
-      <td>${formatQuantity(row.dip_stock)}</td>
-      <td>${formatQuantity(row.variation)}</td>
-      <td>${escapeHtml(row.remark ?? "—")}</td>
-    `;
-    tbody.appendChild(tr);
-  });
+  try {
+    // Fetch total count (only on reset/initial load)
+    if (reset) {
+      const { count, error: countError } = await supabaseClient
+        .from("dsr_stock")
+        .select("*", { count: "exact", head: true })
+        .eq("product", product);
+      
+      if (!countError) {
+        pagination.totalCount = count || 0;
+      }
+    }
+
+    // Fetch data with pagination using range
+    const { data, error } = await supabaseClient
+      .from("dsr_stock")
+      .select(
+        "date, opening_stock, receipts, total_stock, sale_from_meter, testing, net_sale, closing_stock, dip_stock, variation, remark"
+      )
+      .eq("product", product)
+      .order("date", { ascending: false })
+      .range(pagination.offset, pagination.offset + DSR_PAGE_SIZE - 1);
+
+    if (error) {
+      if (reset) {
+        tbody.innerHTML = `<tr><td colspan='11' class='error'>${error.message}</td></tr>`;
+      }
+      pagination.isLoading = false;
+      updateStockPaginationUI(product);
+      return;
+    }
+
+    // Update pagination state
+    const fetchedCount = data?.length || 0;
+    pagination.offset += fetchedCount;
+    pagination.hasMore = fetchedCount === DSR_PAGE_SIZE;
+
+    // Handle empty data
+    if (reset && !fetchedCount) {
+      tbody.innerHTML = "<tr><td colspan='11' class='muted'>No stock records yet.</td></tr>";
+      pagination.isLoading = false;
+      updateStockPaginationUI(product);
+      return;
+    }
+
+    // Clear loading message on initial load
+    if (reset) {
+      tbody.innerHTML = "";
+    }
+
+    // Append rows
+    data.forEach((row) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${row.date}</td>
+        <td>${formatQuantity(row.opening_stock)}</td>
+        <td>${formatQuantity(row.receipts)}</td>
+        <td>${formatQuantity(row.total_stock)}</td>
+        <td>${formatQuantity(row.sale_from_meter)}</td>
+        <td>${formatQuantity(row.testing)}</td>
+        <td>${formatQuantity(row.net_sale)}</td>
+        <td>${formatQuantity(row.closing_stock)}</td>
+        <td>${formatQuantity(row.dip_stock)}</td>
+        <td>${formatQuantity(row.variation)}</td>
+        <td>${escapeHtml(row.remark ?? "—")}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+  } catch (err) {
+    console.error(`Error loading ${product} stock history:`, err);
+    if (reset) {
+      tbody.innerHTML = `<tr><td colspan="11" class="error">Failed to load data</td></tr>`;
+    }
+  } finally {
+    pagination.isLoading = false;
+    updateStockPaginationUI(product);
+  }
+}
+
+/**
+ * Update pagination UI elements for stock history
+ */
+function updateStockPaginationUI(product) {
+  const loadMoreBtn = document.getElementById(`stock-load-more-${product}`);
+  const paginationInfo = document.getElementById(`stock-pagination-info-${product}`);
+  const pagination = stockPagination[product];
+  
+  // Update info text
+  if (paginationInfo) {
+    if (pagination.totalCount > 0) {
+      const showing = Math.min(pagination.offset, pagination.totalCount);
+      paginationInfo.textContent = `Showing ${showing} of ${pagination.totalCount} entries`;
+    } else {
+      paginationInfo.textContent = "";
+    }
+  }
+
+  // Update load more button
+  if (loadMoreBtn) {
+    loadMoreBtn.disabled = false;
+    loadMoreBtn.textContent = "Load more";
+    
+    if (pagination.hasMore && pagination.offset > 0) {
+      loadMoreBtn.classList.remove("hidden");
+    } else {
+      loadMoreBtn.classList.add("hidden");
+    }
+  }
 }
 
 function setDefaultDate(form) {
