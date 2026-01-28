@@ -3,10 +3,11 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Analysis · Petrol Pump</title>
+    <title>Business Analysis · Petrol Pump</title>
     <link rel="stylesheet" href="css/base.css" />
     <link rel="stylesheet" href="css/app.css" />
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
     <script defer src="js/env.js"></script>
     <script defer src="js/errorHandler.js"></script>
     <script defer src="js/cache.js"></script>
@@ -17,7 +18,7 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Analysis</h1>
+      <h1>Business Analysis</h1>
       <nav>
         <a href="dashboard.html">Dashboard</a>
         <a href="dsr.html">Daily Sales Report</a>
@@ -31,12 +32,155 @@
     </header>
 
     <main class="stack">
-      <section class="card">
-        <h2>Business Growth</h2>
+      <section class="card analysis-hero">
+        <h2>Business insights & growth</h2>
         <p class="muted">
-          This page will track sales, profit, and growth trends. Tell me which
-          metrics and charts you want to prioritize.
+          KPIs, trends, and performance metrics to drive better decisions. Select a date range to analyze.
         </p>
+      </section>
+
+      <section class="card">
+        <div class="card-head snapshot-head">
+          <div>
+            <h2>Date range</h2>
+            <p id="analysis-date-label" class="muted">Select a range to analyze.</p>
+          </div>
+          <form id="analysis-filter-form" class="dsr-filter" autocomplete="off">
+            <div class="form-field">
+              <label for="analysis-range">Range</label>
+              <select id="analysis-range">
+                <option value="this-week">This week</option>
+                <option value="this-month" selected>This month</option>
+                <option value="last-3-months">Last 3 months</option>
+                <option value="custom">Custom dates</option>
+              </select>
+            </div>
+            <div id="analysis-custom-range" class="custom-range hidden">
+              <div class="form-field">
+                <label for="analysis-start">From</label>
+                <input id="analysis-start" type="date" />
+              </div>
+              <div class="form-field">
+                <label for="analysis-end">To</label>
+                <input id="analysis-end" type="date" />
+              </div>
+            </div>
+            <div class="filter-actions">
+              <button type="submit" id="analysis-apply">Apply</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2 class="analysis-section-title">Key metrics</h2>
+        <p class="muted analysis-section-desc">Core financials for the selected period.</p>
+        <div class="analysis-kpi-grid analysis-kpi-grid--primary">
+          <article class="card highlight-card stat-tile analysis-kpi">
+            <h3>Total sales</h3>
+            <p class="stat" id="analysis-total-sales">—</p>
+            <small class="muted">Net sale (₹)</small>
+          </article>
+          <article class="card highlight-card stat-tile analysis-kpi">
+            <h3>Total expenses</h3>
+            <p class="stat" id="analysis-total-expenses">—</p>
+            <small class="muted">Logged expenses (₹)</small>
+          </article>
+          <article class="card highlight-card stat-tile analysis-kpi">
+            <h3>Net profit</h3>
+            <p class="stat" id="analysis-profit">—</p>
+            <small class="muted">Sales − expenses</small>
+          </article>
+          <article class="card highlight-card stat-tile analysis-kpi">
+            <h3>Sales growth</h3>
+            <p class="stat" id="analysis-growth">—</p>
+            <small class="muted" id="analysis-growth-note">vs previous period</small>
+          </article>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2 class="analysis-section-title">Performance indicators</h2>
+        <p class="muted analysis-section-desc">Averages, margins, and operational metrics.</p>
+        <div class="analysis-kpi-grid analysis-kpi-grid--secondary">
+          <article class="card stat-tile analysis-kpi analysis-kpi--compact">
+            <h3>Avg. daily sales</h3>
+            <p class="stat" id="analysis-avg-daily-sales">—</p>
+          </article>
+          <article class="card stat-tile analysis-kpi analysis-kpi--compact">
+            <h3>Profit margin</h3>
+            <p class="stat" id="analysis-profit-margin">—</p>
+          </article>
+          <article class="card stat-tile analysis-kpi analysis-kpi--compact">
+            <h3>Total volume</h3>
+            <p class="stat" id="analysis-total-volume">—</p>
+            <small class="muted">Petrol + diesel (L)</small>
+          </article>
+          <article class="card stat-tile analysis-kpi analysis-kpi--compact">
+            <h3>Expense ratio</h3>
+            <p class="stat" id="analysis-expense-ratio">—</p>
+            <small class="muted">Expenses ÷ sales</small>
+          </article>
+          <article class="card stat-tile analysis-kpi analysis-kpi--compact">
+            <h3>Best day</h3>
+            <p class="stat stat-sub" id="analysis-best-day">—</p>
+            <small class="muted" id="analysis-best-day-date">—</small>
+          </article>
+          <article class="card stat-tile analysis-kpi analysis-kpi--compact">
+            <h3>Days profitable</h3>
+            <p class="stat" id="analysis-days-profitable">—</p>
+            <small class="muted" id="analysis-days-profitable-note">of period</small>
+          </article>
+          <article class="card stat-tile analysis-kpi analysis-kpi--compact">
+            <h3>Petrol share</h3>
+            <p class="stat" id="analysis-petrol-share">—</p>
+            <small class="muted">% of revenue</small>
+          </article>
+          <article class="card stat-tile analysis-kpi analysis-kpi--compact">
+            <h3>Profit growth</h3>
+            <p class="stat" id="analysis-profit-growth">—</p>
+            <small class="muted">vs previous period</small>
+          </article>
+        </div>
+      </section>
+
+      <section class="card analysis-insights-card">
+        <h2 class="analysis-section-title">Insights at a glance</h2>
+        <ul id="analysis-insights-list" class="analysis-insights-list">
+          <li class="muted">Select a range to see insights.</li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <h2 class="analysis-section-title">Sales trend</h2>
+        <p class="muted analysis-section-desc">Daily net sale (₹) over the selected range.</p>
+        <div class="chart-wrap">
+          <canvas id="chart-sales" aria-label="Sales over time"></canvas>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2 class="analysis-section-title">Revenue by fuel</h2>
+        <p class="muted analysis-section-desc">Daily petrol vs diesel revenue (₹).</p>
+        <div class="chart-wrap">
+          <canvas id="chart-revenue-mix" aria-label="Petrol vs diesel revenue"></canvas>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2 class="analysis-section-title">Profit & expenses</h2>
+        <p class="muted analysis-section-desc">Daily profit and expenses (₹).</p>
+        <div class="chart-wrap">
+          <canvas id="chart-profit" aria-label="Profit and expenses over time"></canvas>
+        </div>
+      </section>
+
+      <section class="card analysis-chart-row">
+        <h2 class="analysis-section-title">Fuel mix (volume)</h2>
+        <p class="muted analysis-section-desc">Petrol vs diesel net sale (L) in the selected range.</p>
+        <div class="chart-wrap chart-wrap--half">
+          <canvas id="chart-fuel-mix" aria-label="Petrol vs diesel volume"></canvas>
+        </div>
       </section>
     </main>
   </body>
