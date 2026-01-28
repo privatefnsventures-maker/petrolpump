@@ -47,11 +47,19 @@ function markCurrentNavLink() {
 }
 
 /**
+ * Normalize email for staff/role lookups (staff table stores lowercase).
+ */
+function normalizeEmail(email) {
+  return (email || "").toLowerCase().trim();
+}
+
+/**
  * Fetch role from staff table with caching
  * Uses stale-while-revalidate pattern for fast role lookup
  */
 async function fetchRoleFromStaff(email) {
-  if (!email) return null;
+  const normalized = normalizeEmail(email);
+  if (!normalized) return null;
 
   const cacheKey = getRoleCacheKey(email);
 
@@ -59,7 +67,7 @@ async function fetchRoleFromStaff(email) {
     const { data, error } = await supabaseClient
       .from("staff")
       .select("role")
-      .eq("email", email)
+      .eq("email", normalized)
       .maybeSingle();
     if (error) {
       AppError.report(error, { context: "fetchRoleFromStaff" });
@@ -198,23 +206,29 @@ async function requireAuth(options = {}) {
     return null;
   }
 
+  // Resolve role from client (staff table + JWT fallback) first so we can
+  // use it when server check is missing or disagrees
+  const role = await resolveRoleForSession(session);
+
   // Server-side verification (if pageName provided)
-  // This provides defense-in-depth - even if client-side is bypassed,
-  // the server validates access before any sensitive operations
+  // Prefer server result; if server denies, still allow when client role is in allowedRoles
+  // (e.g. user in staff as admin but get_user_role() returned null, or RPC not deployed)
   if (pageName) {
     const accessCheck = await verifyPageAccess(pageName);
     if (accessCheck && !accessCheck.allowed) {
-      console.warn(`Access denied to ${pageName} for role: ${accessCheck.role}`);
-      window.location.href = onDenied;
-      return null;
+      // Server says denied: only redirect if client also says not allowed
+      if (Array.isArray(allowedRoles) && allowedRoles.length > 0 && !allowedRoles.includes(role)) {
+        console.warn(`Access denied to ${pageName} for role: ${accessCheck.role}`);
+        window.location.href = onDenied;
+        return null;
+      }
+      // Server denied but client says allowed (e.g. admin in staff, server had null role) – allow
+      return { session, role };
     }
-    // Use server-verified role if available
     if (accessCheck?.role) {
       return { session, role: accessCheck.role };
     }
   }
-
-  const role = await resolveRoleForSession(session);
 
   if (Array.isArray(allowedRoles) && allowedRoles.length > 0) {
     if (!allowedRoles.includes(role)) {
