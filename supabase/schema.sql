@@ -546,29 +546,36 @@ $$;
 
 comment on function public.audit_trigger_fn() is 'Generic trigger function for audit logging.';
 
--- Audit triggers for sensitive tables (staff changes and deletions)
+-- Audit triggers for sensitive tables (staff: full trail; financial: full trail)
 drop trigger if exists audit_staff_trigger on public.staff;
 create trigger audit_staff_trigger
   after insert or update or delete on public.staff
   for each row execute function public.audit_trigger_fn();
 
--- Audit DELETE operations on financial tables (admin-only operations)
+-- DSR: full audit (insert, update, delete) - who changed what and when
 drop trigger if exists audit_dsr_delete_trigger on public.dsr;
-create trigger audit_dsr_delete_trigger
-  after delete on public.dsr
+drop trigger if exists audit_dsr_trigger on public.dsr;
+create trigger audit_dsr_trigger
+  after insert or update or delete on public.dsr
   for each row execute function public.audit_trigger_fn();
 
+-- DSR stock: full audit
 drop trigger if exists audit_dsr_stock_delete_trigger on public.dsr_stock;
-create trigger audit_dsr_stock_delete_trigger
-  after delete on public.dsr_stock
+drop trigger if exists audit_dsr_stock_trigger on public.dsr_stock;
+create trigger audit_dsr_stock_trigger
+  after insert or update or delete on public.dsr_stock
   for each row execute function public.audit_trigger_fn();
 
+-- Expenses: full audit
 drop trigger if exists audit_expenses_delete_trigger on public.expenses;
-create trigger audit_expenses_delete_trigger
-  after delete on public.expenses
+drop trigger if exists audit_expenses_trigger on public.expenses;
+create trigger audit_expenses_trigger
+  after insert or update or delete on public.expenses
   for each row execute function public.audit_trigger_fn();
 
+-- Credit customers: full audit
 drop trigger if exists audit_credit_delete_trigger on public.credit_customers;
-create trigger audit_credit_delete_trigger
-  after delete on public.credit_customers
+drop trigger if exists audit_credit_trigger on public.credit_customers;
+create trigger audit_credit_trigger
+  after insert or update or delete on public.credit_customers
   for each row execute function public.audit_trigger_fn();
