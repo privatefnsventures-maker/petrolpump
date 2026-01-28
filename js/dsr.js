@@ -13,6 +13,39 @@ function escapeHtml(str) {
 const PRODUCTS = ["petrol", "diesel"];
 let currentUserId = null;
 
+/**
+ * Pump/nozzle configuration per product. Change here when adding pumps or nozzles;
+ * keep in sync with database schema and HTML form (or generate forms from this).
+ */
+const PUMP_CONFIG = {
+  petrol: { pumps: 2, nozzlesPerPump: 2 },
+  diesel: { pumps: 2, nozzlesPerPump: 2 },
+};
+
+/** Build list of DSR reading number field names from config (uses petrol shape for table). */
+function getReadingNumberFields() {
+  const config = PUMP_CONFIG.petrol;
+  const { pumps, nozzlesPerPump } = config;
+  const fields = [];
+  for (let p = 1; p <= pumps; p++) {
+    for (let n = 1; n <= nozzlesPerPump; n++) {
+      fields.push(`opening_pump${p}_nozzle${n}`);
+    }
+  }
+  for (let p = 1; p <= pumps; p++) {
+    for (let n = 1; n <= nozzlesPerPump; n++) {
+      fields.push(`closing_pump${p}_nozzle${n}`);
+    }
+  }
+  for (let p = 1; p <= pumps; p++) {
+    fields.push(`sales_pump${p}`);
+  }
+  fields.push("total_sales", "testing", "dip_reading", "stock");
+  return fields;
+}
+
+const readingNumberFields = getReadingNumberFields();
+
 // Pagination configuration and state
 const DSR_PAGE_SIZE = 10;
 const dsrPagination = {
@@ -23,23 +56,6 @@ const stockPagination = {
   petrol: { offset: 0, hasMore: true, totalCount: 0, isLoading: false },
   diesel: { offset: 0, hasMore: true, totalCount: 0, isLoading: false },
 };
-
-const readingNumberFields = [
-  "opening_pump1_nozzle1",
-  "opening_pump1_nozzle2",
-  "opening_pump2_nozzle1",
-  "opening_pump2_nozzle2",
-  "closing_pump1_nozzle1",
-  "closing_pump1_nozzle2",
-  "closing_pump2_nozzle1",
-  "closing_pump2_nozzle2",
-  "sales_pump1",
-  "sales_pump2",
-  "total_sales",
-  "testing",
-  "dip_reading",
-  "stock",
-];
 
 const stockNumberFields = [
   "opening_stock",
@@ -239,11 +255,14 @@ async function loadReadingHistory(product, reset = false) {
   pagination.isLoading = true;
 
   // Reset pagination state if needed
+  const config = PUMP_CONFIG[product] || PUMP_CONFIG.petrol;
+  const colCount = 7 + config.pumps; // date + pump sales + total_sales, testing, dip_reading, stock, rate, remarks
+
   if (reset) {
     pagination.offset = 0;
     pagination.hasMore = true;
     pagination.totalCount = 0;
-    tbody.innerHTML = "<tr><td colspan='9' class='muted'>Loading recent readings…</td></tr>";
+    tbody.innerHTML = `<tr><td colspan='${colCount}' class='muted'>Loading recent readings…</td></tr>`;
   }
 
   // Update button state
@@ -265,19 +284,20 @@ async function loadReadingHistory(product, reset = false) {
       }
     }
 
+    const pumpCols = Array.from({ length: config.pumps }, (_, i) => `sales_pump${i + 1}`).join(", ");
+    const selectCols = `date, ${pumpCols}, total_sales, testing, dip_reading, stock, petrol_rate, diesel_rate, remarks`;
+
     // Fetch data with pagination using range
     const { data, error } = await supabaseClient
       .from("dsr")
-      .select(
-        "date, sales_pump1, sales_pump2, total_sales, testing, dip_reading, stock, petrol_rate, diesel_rate, remarks"
-      )
+      .select(selectCols)
       .eq("product", product)
       .order("date", { ascending: false })
       .range(pagination.offset, pagination.offset + DSR_PAGE_SIZE - 1);
 
     if (error) {
       if (reset) {
-        tbody.innerHTML = `<tr><td colspan='9' class='error'>${error.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan='${colCount}' class='error'>${error.message}</td></tr>`;
       }
       pagination.isLoading = false;
       updateDsrPaginationUI(product);
@@ -291,7 +311,7 @@ async function loadReadingHistory(product, reset = false) {
 
     // Handle empty data
     if (reset && !fetchedCount) {
-      tbody.innerHTML = "<tr><td colspan='9' class='muted'>No readings saved yet.</td></tr>";
+      tbody.innerHTML = `<tr><td colspan='${colCount}' class='muted'>No readings saved yet.</td></tr>`;
       pagination.isLoading = false;
       updateDsrPaginationUI(product);
       return;
@@ -303,13 +323,14 @@ async function loadReadingHistory(product, reset = false) {
     }
 
     // Append rows
+    const pumpColNames = Array.from({ length: config.pumps }, (_, i) => `sales_pump${i + 1}`);
     data.forEach((row) => {
       const tr = document.createElement("tr");
       const rate = product === "petrol" ? row.petrol_rate : row.diesel_rate;
+      const pumpCells = pumpColNames.map((col) => `<td>${formatQuantity(row[col])}</td>`).join("");
       tr.innerHTML = `
         <td>${row.date}</td>
-        <td>${formatQuantity(row.sales_pump1)}</td>
-        <td>${formatQuantity(row.sales_pump2)}</td>
+        ${pumpCells}
         <td>${formatQuantity(row.total_sales)}</td>
         <td>${formatQuantity(row.testing)}</td>
         <td>${formatQuantity(row.dip_reading)}</td>
@@ -323,7 +344,8 @@ async function loadReadingHistory(product, reset = false) {
   } catch (err) {
     console.error(`Error loading ${product} reading history:`, err);
     if (reset) {
-      tbody.innerHTML = `<tr><td colspan="9" class="error">Failed to load data</td></tr>`;
+      const errColCount = 7 + (PUMP_CONFIG[product] || PUMP_CONFIG.petrol).pumps;
+      tbody.innerHTML = `<tr><td colspan="${errColCount}" class="error">Failed to load data</td></tr>`;
     }
   } finally {
     pagination.isLoading = false;
@@ -548,28 +570,31 @@ function toNumber(value) {
 }
 
 function updateDerivedFields(form) {
-  const openingP1N1 = getNumber(form, "opening_pump1_nozzle1");
-  const openingP1N2 = getNumber(form, "opening_pump1_nozzle2");
-  const openingP2N1 = getNumber(form, "opening_pump2_nozzle1");
-  const openingP2N2 = getNumber(form, "opening_pump2_nozzle2");
-  const closingP1N1 = getNumber(form, "closing_pump1_nozzle1");
-  const closingP1N2 = getNumber(form, "closing_pump1_nozzle2");
-  const closingP2N1 = getNumber(form, "closing_pump2_nozzle1");
-  const closingP2N2 = getNumber(form, "closing_pump2_nozzle2");
+  const product = form.id?.replace("dsr-form-", "") || "petrol";
+  const config = PUMP_CONFIG[product] || PUMP_CONFIG.petrol;
+  const { pumps, nozzlesPerPump } = config;
+
+  const salesByPump = [];
+  for (let p = 1; p <= pumps; p++) {
+    let pumpSales = 0;
+    for (let n = 1; n <= nozzlesPerPump; n++) {
+      const opening = getNumber(form, `opening_pump${p}_nozzle${n}`);
+      const closing = getNumber(form, `closing_pump${p}_nozzle${n}`);
+      pumpSales += closing - opening;
+    }
+    salesByPump.push(pumpSales);
+    setNumber(form, `sales_pump${p}`, pumpSales);
+  }
+
+  const totalSales = salesByPump.reduce((a, b) => a + b, 0);
   const testing = getNumber(form, "testing");
   const stock = getNumber(form, "stock");
   const openingStock = getNumber(form, "opening_stock");
   const receipts = getNumber(form, "receipts");
-
-  const salesPump1 = (closingP1N1 - openingP1N1) + (closingP1N2 - openingP1N2);
-  const salesPump2 = (closingP2N1 - openingP2N1) + (closingP2N2 - openingP2N2);
-  const totalSales = salesPump1 + salesPump2;
   const netSale = totalSales - testing;
   const totalStock = openingStock + receipts;
   const variation = stock - (totalStock - netSale);
 
-  setNumber(form, "sales_pump1", salesPump1);
-  setNumber(form, "sales_pump2", salesPump2);
   setNumber(form, "total_sales", totalSales);
   setNumber(form, "net_sale", netSale);
   setNumber(form, "total_stock", totalStock);
