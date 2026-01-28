@@ -371,13 +371,17 @@ function updateTotalSaleRupees() {
 async function loadCreditSummary(dateStr) {
   const creditTotal = document.getElementById("credit-total");
   const selectedDate = dateStr || new Date().toISOString().slice(0, 10);
-  const endOfDay = new Date(`${selectedDate}T23:59:59.999Z`).getTime();
+  const endOfDayISO = `${selectedDate}T23:59:59.999Z`;
 
-  // Fetch outstanding rows and filter client-side by last_payment (fallback to created_at)
+  // Filter in database: last_payment <= date OR (last_payment is null AND created_at <= endOfDay)
   const { data, error } = await supabaseClient
     .from("credit_customers")
-    .select("customer_name, amount_due, last_payment, created_at")
-    .gt("amount_due", 0);
+    .select("amount_due")
+    .gt("amount_due", 0)
+    .or(
+      `and(last_payment.not.is.null,last_payment.lte.${selectedDate}),` +
+      `and(last_payment.is.null,created_at.lte.${endOfDayISO})`
+    );
 
   if (error) {
     console.error(error);
@@ -385,15 +389,7 @@ async function loadCreditSummary(dateStr) {
     return;
   }
 
-  const filtered = (data ?? []).filter((row) => {
-    const last = row.last_payment ? new Date(`${row.last_payment}T00:00:00Z`) : null;
-    const created = row.created_at ? new Date(row.created_at) : null;
-    const effective = last || created;
-    if (!effective) return false;
-    return effective.getTime() <= endOfDay;
-  });
-
-  const total = filtered.reduce((sum, row) => sum + Number(row.amount_due ?? 0), 0);
+  const total = (data ?? []).reduce((sum, row) => sum + Number(row.amount_due ?? 0), 0);
   if (creditTotal) creditTotal.textContent = formatCurrency(total);
 }
 
