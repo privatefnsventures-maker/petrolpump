@@ -2,7 +2,7 @@
 // Combines multiple dashboard queries into a single round-trip
 // This reduces latency by ~60-70% compared to multiple parallel API calls
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
