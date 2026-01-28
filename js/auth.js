@@ -1,4 +1,4 @@
-/* global supabaseClient */
+/* global supabaseClient, AppCache */
 
 const loginForm = document.getElementById("login-form");
 const loginError = document.getElementById("login-error");
@@ -10,6 +10,13 @@ const LANDING_BY_ROLE = {
   admin: "dashboard.html",
   supervisor: "credit.html",
 };
+
+/**
+ * Generate cache key for user role
+ */
+function getRoleCacheKey(email) {
+  return `staff_role_${email?.toLowerCase() ?? "unknown"}`;
+}
 
 function extractRole(source) {
   if (!source) return DEFAULT_ROLE;
@@ -39,18 +46,34 @@ function markCurrentNavLink() {
   });
 }
 
+/**
+ * Fetch role from staff table with caching
+ * Uses stale-while-revalidate pattern for fast role lookup
+ */
 async function fetchRoleFromStaff(email) {
   if (!email) return null;
-  const { data, error } = await supabaseClient
-    .from("staff")
-    .select("role")
-    .eq("email", email)
-    .maybeSingle();
-  if (error) {
-    console.error(error);
-    return null;
+
+  const cacheKey = getRoleCacheKey(email);
+
+  const fetchFn = async () => {
+    const { data, error } = await supabaseClient
+      .from("staff")
+      .select("role")
+      .eq("email", email)
+      .maybeSingle();
+    if (error) {
+      console.error(error);
+      return null;
+    }
+    return data?.role ?? null;
+  };
+
+  // Use caching if available
+  if (typeof AppCache !== "undefined" && AppCache) {
+    return AppCache.getWithSWR(cacheKey, fetchFn, "staff_role");
   }
-  return data?.role ?? null;
+
+  return fetchFn();
 }
 
 async function resolveRoleForSession(session) {
@@ -58,6 +81,15 @@ async function resolveRoleForSession(session) {
   const email = session.user?.email;
   const staffRole = await fetchRoleFromStaff(email);
   return staffRole ?? extractRole(session);
+}
+
+/**
+ * Clear cached role for a user (call after role changes)
+ */
+function invalidateUserRoleCache(email) {
+  if (typeof AppCache !== "undefined" && AppCache && email) {
+    AppCache.remove(getRoleCacheKey(email));
+  }
 }
 
 if (loginForm) {
@@ -92,7 +124,21 @@ if (loginForm) {
 
 if (logoutButton) {
   logoutButton.addEventListener("click", async () => {
+    // Get current session before signing out to clear cache
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    const email = session?.user?.email;
+
     await supabaseClient.auth.signOut();
+
+    // Clear user-specific caches on logout
+    if (email) {
+      invalidateUserRoleCache(email);
+    }
+    // Clear API-related caches
+    if (typeof clearApiCaches === "function") {
+      clearApiCaches();
+    }
+
     window.location.href = "index.html";
   });
 }
@@ -210,3 +256,4 @@ window.resolveLandingByRole = resolveLanding;
 window.applyRoleVisibility = applyRoleVisibility;
 window.resolveRoleForSession = resolveRoleForSession;
 window.verifyPageAccess = verifyPageAccess;
+window.invalidateUserRoleCache = invalidateUserRoleCache;

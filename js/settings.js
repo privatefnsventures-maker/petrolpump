@@ -1,4 +1,4 @@
-/* global supabaseClient, requireAuth, applyRoleVisibility */
+/* global supabaseClient, requireAuth, applyRoleVisibility, AppCache, invalidateUserRoleCache */
 
 // Simple HTML escape for XSS prevention
 function escapeHtml(str) {
@@ -102,6 +102,16 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       form.reset();
       successEl?.classList.remove("hidden");
+      
+      // Invalidate cached role for updated user
+      if (typeof invalidateUserRoleCache === "function") {
+        invalidateUserRoleCache(email);
+      }
+      // Invalidate staff list cache
+      if (typeof AppCache !== "undefined" && AppCache) {
+        AppCache.invalidateByType("staff_list");
+      }
+      
       loadStaffList();
     });
   }

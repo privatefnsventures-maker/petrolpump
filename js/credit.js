@@ -1,4 +1,4 @@
-/* global supabaseClient, requireAuth, applyRoleVisibility, formatCurrency */
+/* global supabaseClient, requireAuth, applyRoleVisibility, formatCurrency, AppCache */
 
 // Pagination state
 const PAGE_SIZE = 25;
@@ -67,6 +67,13 @@ async function handleCreditSubmit(event, currentUserId) {
   form.reset();
   successEl?.classList.remove("hidden");
   loadCreditLedger(true); // Reset pagination to show new entry at top
+  
+  // Invalidate credit-related caches so dashboard shows fresh data
+  if (typeof AppCache !== "undefined" && AppCache) {
+    AppCache.invalidateByType("credit_summary");
+    AppCache.invalidateByType("recent_activity");
+  }
+  
   try {
     localStorage.setItem("credit-updated", String(Date.now()));
   } catch (e) {
