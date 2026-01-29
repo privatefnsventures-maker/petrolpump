@@ -1,4 +1,4 @@
-/* global supabaseClient, requireAuth, applyRoleVisibility, formatCurrency, AppCache, AppError */
+/* global supabaseClient, requireAuth, applyRoleVisibility, formatCurrency, AppCache, AppError, getValidFilterState, setFilterState */
 
 // Simple HTML escape for XSS prevention
 function escapeHtml(str) {
@@ -116,18 +116,37 @@ document.addEventListener("DOMContentLoaded", async () => {
   const todayStr = new Date().toISOString().slice(0, 10);
   
   const enforceRateFieldsReadOnly = () => {
-    // Rates are always computed from DSR entries; keep them read-only.
     if (petrolRateInput) petrolRateInput.readOnly = true;
     if (dieselRateInput) dieselRateInput.readOnly = true;
   };
-  
+
+  const SNAPSHOT_RANGE = new Set(["date"]);
+  const storedSnapshot = typeof window.getValidFilterState === "function"
+    ? window.getValidFilterState("dashboard_snapshot", SNAPSHOT_RANGE)
+    : null;
+  const snapshotDateStr = storedSnapshot?.start || todayStr;
   if (snapshotDateInput) {
-    snapshotDateInput.value = todayStr;
-    enforceRateFieldsReadOnly(); // Set initial state
-    
+    snapshotDateInput.value = snapshotDateStr;
+    enforceRateFieldsReadOnly();
+    window.setFilterState && window.setFilterState("dashboard_snapshot", { range: "date", start: snapshotDateStr });
+    const updateSalesDailyLink = () => {
+      const link = document.getElementById("sales-daily-link");
+      if (link) link.href = "sales-daily.html?date=" + (snapshotDateInput.value || todayStr);
+    };
+    updateSalesDailyLink();
+    const salesDailyLink = document.getElementById("sales-daily-link");
+    if (salesDailyLink) {
+      salesDailyLink.addEventListener("click", () => {
+        try {
+          sessionStorage.setItem("petrolpump_sales_daily_from_dashboard", snapshotDateInput.value || todayStr);
+        } catch (_) {}
+      });
+    }
     snapshotDateInput.addEventListener("change", async () => {
       const dateValue = snapshotDateInput.value || todayStr;
       enforceRateFieldsReadOnly();
+      window.setFilterState && window.setFilterState("dashboard_snapshot", { range: "date", start: dateValue });
+      updateSalesDailyLink();
       await Promise.all([loadTodaySales(dateValue), loadCreditSummary(dateValue)]);
     });
   }
@@ -135,8 +154,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   try {
     await Promise.all([
-      loadTodaySales(todayStr),
-      loadCreditSummary(todayStr),
+      loadTodaySales(snapshotDateStr),
+      loadCreditSummary(snapshotDateStr),
       initializeDsrDashboard(),
       initializeProfitLossFilter(),
       loadRecentActivity(),
@@ -160,12 +179,18 @@ async function initializeDsrDashboard() {
     return;
   }
 
-  // Normalize the selection (some browsers may restore stale/invalid values).
-  // Only force "this-month" when the current selection is invalid/empty.
-  const allowedSelections = new Set(["this-week", "this-month", "custom"]);
-  const currentSelection = rangeSelect.value;
-  if (!allowedSelections.has(currentSelection)) {
-    rangeSelect.value = "this-month";
+  const DASHBOARD_RANGES = new Set(["today", "this-week", "this-month", "custom"]);
+  const stored = typeof window.getValidFilterState === "function"
+    ? window.getValidFilterState("dashboard_dsr", DASHBOARD_RANGES)
+    : null;
+  if (stored) {
+    rangeSelect.value = stored.range;
+    if (stored.range === "custom" && stored.start && stored.end) {
+      startInput.value = stored.start;
+      endInput.value = stored.end;
+    }
+  } else {
+    rangeSelect.value = "today";
   }
 
   const isCustomInitial = rangeSelect.value === "custom";
@@ -187,36 +212,28 @@ async function initializeDsrDashboard() {
     await loadDsrSummary(initialRange);
   }
 
+  const saveDsrFilter = () => {
+    window.setFilterState && window.setFilterState("dashboard_dsr", {
+      range: rangeSelect.value,
+      start: startInput.value || undefined,
+      end: endInput.value || undefined,
+    });
+  };
+
   rangeSelect.addEventListener("change", async () => {
     const isCustom = rangeSelect.value === "custom";
     setCustomRangeVisibility(customRange, startInput, endInput, isCustom);
-    if (isCustom) {
-      if (!startInput.value && !endInput.value) {
-        const today = new Date();
-        startInput.value = formatDateInput(today);
-        endInput.value = formatDateInput(today);
-      }
-      // Load data with pre-filled dates and show the date range
-      const range = getRangeForSelection(
-        rangeSelect.value,
-        startInput,
-        endInput
-      );
-      if (range) {
-        updateDsrLabel(range, range.modeInfo);
-        await loadDsrSummary(range);
-      }
-      return;
+    if (isCustom && !startInput.value && !endInput.value) {
+      const today = new Date();
+      startInput.value = formatDateInput(today);
+      endInput.value = formatDateInput(today);
     }
-
-    const range = getRangeForSelection(
-      rangeSelect.value,
-      startInput,
-      endInput
-    );
+    saveDsrFilter();
+    const range = getRangeForSelection(rangeSelect.value, startInput, endInput);
     if (!range) return;
     updateDsrLabel(range, range.modeInfo);
     await loadDsrSummary(range);
+    if (isCustom) saveDsrFilter();
   });
 
   form.addEventListener("submit", async (event) => {
@@ -238,6 +255,7 @@ async function initializeDsrDashboard() {
     if (!range) return;
     updateDsrLabel(range, range.modeInfo);
     await loadDsrSummary(range);
+    saveDsrFilter();
   });
 
   const handleCustomChange = async () => {
@@ -257,6 +275,7 @@ async function initializeDsrDashboard() {
     if (!range) return;
     updateDsrLabel(range, range.modeInfo);
     await loadDsrSummary(range);
+    saveDsrFilter();
   };
 
   startInput.addEventListener("change", handleCustomChange);
@@ -776,34 +795,26 @@ async function initializeProfitLossFilter() {
   const customRange = document.getElementById("pl-custom-range");
   const label = document.getElementById("pl-date-label");
 
-  console.log("initializeProfitLossFilter - Elements:", { 
-    rangeSelect: !!rangeSelect, 
-    startInput: !!startInput, 
-    endInput: !!endInput, 
-    form: !!form, 
-    customRange: !!customRange, 
-    label: !!label 
-  });
-
   if (!rangeSelect || !startInput || !endInput || !form || !customRange || !label) {
-    console.warn("P&L filter elements not found", { rangeSelect, startInput, endInput, form, customRange, label });
     return;
   }
 
-  // Normalize the selection (some browsers may restore stale/invalid values).
-  // Only force "this-month" when the current selection is invalid/empty.
-  const allowedSelections = new Set(["this-week", "this-month", "custom"]);
-  const currentSelection = rangeSelect.value;
-  if (!allowedSelections.has(currentSelection)) {
-    rangeSelect.value = "this-month";
+  const DASHBOARD_RANGES = new Set(["today", "this-week", "this-month", "custom"]);
+  const storedPl = typeof window.getValidFilterState === "function"
+    ? window.getValidFilterState("dashboard_pl", DASHBOARD_RANGES)
+    : null;
+  if (storedPl) {
+    rangeSelect.value = storedPl.range;
+    if (storedPl.range === "custom" && storedPl.start && storedPl.end) {
+      startInput.value = storedPl.start;
+      endInput.value = storedPl.end;
+    }
+  } else {
+    rangeSelect.value = "today";
   }
 
   const isCustom = rangeSelect.value === "custom";
-  console.log("initializeProfitLossFilter - currentSelection:", rangeSelect.value, "isCustom:", isCustom);
-
-  console.log("initializeProfitLossFilter - Calling setCustomRangeVisibility with isCustom:", isCustom);
   setCustomRangeVisibility(customRange, startInput, endInput, isCustom);
-  console.log("initializeProfitLossFilter - After setCustomRangeVisibility, customRange.classList:", customRange.classList.toString());
   
   if (isCustom && !startInput.value && !endInput.value) {
     const today = new Date();
@@ -816,70 +827,49 @@ async function initializeProfitLossFilter() {
     startInput,
     endInput
   );
-  console.log("initializeProfitLossFilter - initialRange:", initialRange);
   if (initialRange) {
     updatePlLabel(initialRange, initialRange.modeInfo, label);
     await loadProfitLossSummary(initialRange);
   }
 
+  const savePlFilter = () => {
+    window.setFilterState && window.setFilterState("dashboard_pl", {
+      range: rangeSelect.value,
+      start: startInput.value || undefined,
+      end: endInput.value || undefined,
+    });
+  };
+
   rangeSelect.addEventListener("change", async () => {
-    console.log("P&L rangeSelect change event fired - value:", rangeSelect.value);
     const isCustom = rangeSelect.value === "custom";
-    
-    // Get fresh references to elements
     const customRangeEl = document.getElementById("pl-custom-range");
     const startEl = document.getElementById("pl-start");
     const endEl = document.getElementById("pl-end");
     const labelEl = document.getElementById("pl-date-label");
-    
-    console.log("P&L change - Elements found:", { customRangeEl: !!customRangeEl, startEl: !!startEl, endEl: !!endEl, labelEl: !!labelEl });
-    console.log("P&L change - isCustom:", isCustom, "calling setCustomRangeVisibility");
-    
+
     if (customRangeEl && startEl && endEl) {
       setCustomRangeVisibility(customRangeEl, startEl, endEl, isCustom);
-      console.log("P&L change - After setCustomRangeVisibility, customRangeEl.classList:", customRangeEl.classList.toString());
     }
-    
-    if (isCustom) {
-      if (startEl && endEl && !startEl.value && !endEl.value) {
-        const today = new Date();
-        startEl.value = formatDateInput(today);
-        endEl.value = formatDateInput(today);
-      }
-      // Load data with pre-filled dates and show the date range
-      const range = getRangeForSelection(
-        rangeSelect.value,
-        startEl,
-        endEl
-      );
-      if (range && labelEl) {
-        updatePlLabel(range, range.modeInfo, labelEl);
-        await loadProfitLossSummary(range);
-      }
-      return;
+    if (isCustom && startEl && endEl && !startEl.value && !endEl.value) {
+      const today = new Date();
+      startEl.value = formatDateInput(today);
+      endEl.value = formatDateInput(today);
     }
-
-    const range = getRangeForSelection(
-      rangeSelect.value,
-      startEl,
-      endEl
-    );
+    savePlFilter();
+    const range = getRangeForSelection(rangeSelect.value, startEl, endEl);
     if (!range) return;
-    if (labelEl) {
-      updatePlLabel(range, range.modeInfo, labelEl);
-    }
+    if (labelEl) updatePlLabel(range, range.modeInfo, labelEl);
     await loadProfitLossSummary(range);
+    if (isCustom) savePlFilter();
   });
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     
-    // Get fresh references
     const startEl = document.getElementById("pl-start");
     const endEl = document.getElementById("pl-end");
     const labelEl = document.getElementById("pl-date-label");
 
-    // Validate custom date range
     if (rangeSelect.value === "custom") {
       if (startEl?.value && endEl?.value && startEl.value > endEl.value) {
         alert("Start date cannot be after end date. Please select valid dates.");
@@ -897,19 +887,17 @@ async function initializeProfitLossFilter() {
       updatePlLabel(range, range.modeInfo, labelEl);
     }
     await loadProfitLossSummary(range);
+    savePlFilter();
   });
 
   const handleCustomChange = async () => {
     if (rangeSelect.value !== "custom") return;
     
-    // Get fresh references
     const startEl = document.getElementById("pl-start");
     const endEl = document.getElementById("pl-end");
     const labelEl = document.getElementById("pl-date-label");
 
-    // Validate custom date range
     if (startEl?.value && endEl?.value && startEl.value > endEl.value) {
-      console.warn("Start date is after end date, skipping load");
       return;
     }
 
@@ -923,6 +911,7 @@ async function initializeProfitLossFilter() {
       updatePlLabel(range, range.modeInfo, labelEl);
     }
     await loadProfitLossSummary(range);
+    savePlFilter();
   };
 
   startInput.addEventListener("change", handleCustomChange);
@@ -1023,6 +1012,12 @@ window.addEventListener("resize", () => {
 function updatePlLabel(range, modeInfo, label) {
   if (!label) return;
 
+  if (modeInfo?.mode === "today") {
+    const dateLabel = formatDisplayDate(range.start);
+    label.textContent = `Today · ${dateLabel}`;
+    return;
+  }
+
   if (modeInfo?.mode === "this-month") {
     const monthDate = new Date(`${range.start}T00:00:00`);
     const monthLabel = monthDate.toLocaleDateString("en-IN", {
@@ -1050,6 +1045,15 @@ function updatePlLabel(range, modeInfo, label) {
 
 function getRangeForSelection(selection, startInput, endInput) {
   const today = new Date();
+  const todayStr = formatDateInput(today);
+
+  if (selection === "today") {
+    return {
+      start: todayStr,
+      end: todayStr,
+      modeInfo: { mode: "today" },
+    };
+  }
 
   if (selection === "this-week") {
     return {
@@ -1109,6 +1113,12 @@ function getWeekRange(date) {
 function updateDsrLabel(range, modeInfo) {
   const label = document.getElementById("dsr-date-label");
   if (!label) return;
+
+  if (modeInfo?.mode === "today") {
+    const dateLabel = formatDisplayDate(range.start);
+    label.textContent = `Today · ${dateLabel}`;
+    return;
+  }
 
   if (modeInfo?.mode === "this-month") {
     const monthDate = new Date(`${range.start}T00:00:00`);
