@@ -4,6 +4,10 @@ tbody tr:hover {
   background: #f8fafc;
 }
 
+.margin-top {
+  margin-top: 1rem;
+}
+
 /* Settle and delete inline actions */
 .settle-inline {
   display: flex;

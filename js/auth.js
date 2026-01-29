@@ -253,9 +253,14 @@ async function requireAuth(options = {}) {
  * @param {string} role - The user's role ('admin' or 'supervisor')
  */
 function applyRoleVisibility(role) {
-  document
-    .querySelectorAll("[data-role='admin-only']")
-    .forEach((el) => role !== "admin" && el.remove());
+  if (role === "admin") {
+    document.body.classList.add("role-admin");
+  } else {
+    document.body.classList.remove("role-admin");
+    document
+      .querySelectorAll("[data-role='admin-only']")
+      .forEach((el) => el.remove());
+  }
 
   document
     .querySelectorAll("[data-role='supervisor-only']")
