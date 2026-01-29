@@ -22,6 +22,39 @@ const PUMP_CONFIG = {
   diesel: { pumps: 2, nozzlesPerPump: 2 },
 };
 
+/** Rate column name per product (dsr table). */
+const RATE_FIELD_BY_PRODUCT = { petrol: "petrol_rate", diesel: "diesel_rate" };
+
+/** User-facing message when duplicate DSR date is submitted. */
+const MSG_DUPLICATE_DSR_DATE =
+  "An entry already exists for this date. Edit the existing entry or choose another date.";
+
+/**
+ * Returns closing meter field names for a product config (e.g. closing_pump1_nozzle1, …).
+ * @param {{ pumps: number, nozzlesPerPump: number }} config
+ * @returns {string[]}
+ */
+function getClosingMeterFields(config) {
+  const fields = [];
+  for (let p = 1; p <= config.pumps; p++) {
+    for (let n = 1; n <= config.nozzlesPerPump; n++) {
+      fields.push(`closing_pump${p}_nozzle${n}`);
+    }
+  }
+  return fields;
+}
+
+/**
+ * Returns the date string (YYYY-MM-DD) for the day before the given date string.
+ * @param {string} dateStr - YYYY-MM-DD
+ * @returns {string}
+ */
+function getPreviousDateStr(dateStr) {
+  const d = new Date(dateStr + "T12:00:00");
+  d.setDate(d.getDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
 /** Build list of DSR reading number field names from config (uses petrol shape for table). */
 function getReadingNumberFields() {
   const config = PUMP_CONFIG.petrol;
@@ -94,7 +127,19 @@ function initReadingForm(product) {
   if (!form) return;
 
   setDefaultDate(form);
-  updateDerivedFields(form);
+
+  const dateInput = form.querySelector("input[name='date']");
+  if (dateInput) {
+    const onDateChange = () => {
+      prefillOpeningFromPreviousDay(product, form);
+      updateDerivedFields(form);
+    };
+    dateInput.addEventListener("change", onDateChange);
+    dateInput.addEventListener("input", onDateChange);
+    onDateChange();
+  } else {
+    updateDerivedFields(form);
+  }
 
   form.addEventListener("input", () => {
     updateDerivedFields(form);
@@ -139,6 +184,15 @@ function initReadingForm(product) {
       return;
     }
 
+    const exists = await dsrEntryExistsForDate(product, payload.date);
+    if (exists) {
+      if (errorEl) {
+        errorEl.textContent = MSG_DUPLICATE_DSR_DATE;
+        errorEl.classList.remove("hidden");
+      }
+      return;
+    }
+
     const { error } = await supabaseClient.from("dsr").insert(payload);
 
     if (error) {
@@ -148,6 +202,8 @@ function initReadingForm(product) {
 
     form.reset();
     setDefaultDate(form);
+    prefillOpeningFromPreviousDay(product, form);
+    updateDerivedFields(form);
     successEl?.classList.remove("hidden");
     loadReadingHistory(product, true); // Reset pagination to show new entry
   });
@@ -551,6 +607,154 @@ function updateStockPaginationUI(product) {
       loadMoreBtn.classList.add("hidden");
     }
   }
+}
+
+// --- DSR prefill: fetch and apply helpers ---
+
+/**
+ * Fetches the DSR row to use for prefill: previous day if present, else latest before selected date.
+ * @param {string} product - petrol | diesel
+ * @param {string} selectedDateStr - YYYY-MM-DD
+ * @param {string} selectCols - Comma-separated column names to select
+ * @returns {Promise<{ row: object | null, error: Error | null }>}
+ */
+async function fetchDsrRowForPrefill(product, selectedDateStr, selectCols) {
+  const prevDateStr = getPreviousDateStr(selectedDateStr);
+
+  const { data: prevDayData, error: prevError } = await supabaseClient
+    .from("dsr")
+    .select(selectCols)
+    .eq("product", product)
+    .eq("date", prevDateStr)
+    .maybeSingle();
+
+  if (prevError) {
+    AppError.report(prevError, { context: "fetchDsrRowForPrefill", product });
+    return { row: null, error: prevError };
+  }
+  if (prevDayData) return { row: prevDayData, error: null };
+
+  const { data: lastData, error: lastError } = await supabaseClient
+    .from("dsr")
+    .select(selectCols)
+    .eq("product", product)
+    .lt("date", selectedDateStr)
+    .order("date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (lastError) {
+    AppError.report(lastError, { context: "fetchDsrRowForPrefill", product });
+    return { row: null, error: lastError };
+  }
+  return { row: lastData, error: null };
+}
+
+/**
+ * Fetches the most recent non-null rate for a product from dsr.
+ * @param {string} product - petrol | diesel
+ * @returns {Promise<number | null>}
+ */
+async function fetchLastDsrRate(product) {
+  const rateField = RATE_FIELD_BY_PRODUCT[product];
+  if (!rateField) return null;
+
+  const { data, error } = await supabaseClient
+    .from("dsr")
+    .select(rateField)
+    .eq("product", product)
+    .not(rateField, "is", null)
+    .order("date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error || data?.[rateField] == null) return null;
+  const num = Number(data[rateField]);
+  return Number.isFinite(num) ? num : null;
+}
+
+/**
+ * Applies opening meter values to the form from a DSR row, or "0.00" if no row.
+ * @param {HTMLFormElement} form
+ * @param {object | null} row - DSR row with closing_pump*_nozzle* fields
+ * @param {{ pumps: number, nozzlesPerPump: number }} config
+ */
+function applyOpeningMeterToForm(form, row, config) {
+  const closingFields = getClosingMeterFields(config);
+  for (const closingKey of closingFields) {
+    const openingKey = closingKey.replace("closing_", "opening_");
+    const input = form.querySelector(`[name="${openingKey}"]`);
+    if (!input) continue;
+
+    let value = "0.00";
+    if (row) {
+      const v = row[closingKey];
+      if (v != null && Number.isFinite(Number(v))) value = Number(v).toFixed(2);
+    }
+    input.value = value;
+  }
+}
+
+/**
+ * Sets the rate input on the form if value is a valid number.
+ * @param {HTMLFormElement} form
+ * @param {string} product - petrol | diesel
+ * @param {number | null} rateValue
+ */
+function applyRateToForm(form, product, rateValue) {
+  const rateField = RATE_FIELD_BY_PRODUCT[product];
+  if (!rateField) return;
+  const input = form.querySelector(`[name="${rateField}"]`);
+  if (!input || rateValue == null || !Number.isFinite(rateValue)) return;
+  input.value = rateValue.toFixed(2);
+}
+
+/**
+ * Returns true if a DSR entry exists for the given product and date.
+ * @param {string} product - petrol | diesel
+ * @param {string} dateStr - YYYY-MM-DD
+ * @returns {Promise<boolean>}
+ */
+async function dsrEntryExistsForDate(product, dateStr) {
+  const { data, error } = await supabaseClient
+    .from("dsr")
+    .select("id")
+    .eq("product", product)
+    .eq("date", dateStr)
+    .maybeSingle();
+
+  return !error && data != null;
+}
+
+/**
+ * Prefill opening meter and rate from previous/last DSR. Opening uses previous day, else latest before date; if none, opening is zero. Rate uses that row or last entered rate.
+ * @param {string} product - petrol | diesel
+ * @param {HTMLFormElement} form - The DSR reading form
+ */
+async function prefillOpeningFromPreviousDay(product, form) {
+  const dateInput = form.querySelector("input[name='date']");
+  if (!dateInput?.value) return;
+
+  const selectedDateStr = dateInput.value;
+  const config = PUMP_CONFIG[product] || PUMP_CONFIG.petrol;
+  const rateField = RATE_FIELD_BY_PRODUCT[product];
+  const closingFields = getClosingMeterFields(config);
+  const selectCols = closingFields.join(", ") + (rateField ? ", " + rateField : "");
+
+  const { row, error } = await fetchDsrRowForPrefill(product, selectedDateStr, selectCols);
+  if (error) return;
+
+  applyOpeningMeterToForm(form, row, config);
+
+  let rateValue = row?.[rateField];
+  if (rateValue == null || !Number.isFinite(Number(rateValue))) {
+    rateValue = await fetchLastDsrRate(product);
+  } else {
+    rateValue = Number(rateValue);
+  }
+  applyRateToForm(form, product, rateValue);
+
+  updateDerivedFields(form);
 }
 
 function setDefaultDate(form) {
