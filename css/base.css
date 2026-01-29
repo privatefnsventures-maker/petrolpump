@@ -378,6 +378,14 @@ main {
   display: none;
 }
 
+/* Admin-only nav/sections: hidden until role is known (prevents flash on load) */
+[data-role="admin-only"] {
+  display: none;
+}
+body.role-admin [data-role="admin-only"] {
+  display: revert;
+}
+
 /* Forms */
 .form {
   display: flex;

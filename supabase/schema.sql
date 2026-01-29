@@ -196,6 +196,7 @@ begin
     when 'credit' then v_role in ('admin', 'supervisor')
     when 'sales-daily' then v_role in ('admin', 'supervisor')
     when 'attendance' then v_role in ('admin', 'supervisor')
+    when 'salary' then v_role in ('admin', 'supervisor')
     else false
   end;
 
@@ -454,6 +455,79 @@ create policy "staff_delete_admin" on public.staff
   to authenticated
   using (public.is_admin());
 
+-- Staff members (salary recipients: 5 staff including supervisor - distinct from login staff)
+create table if not exists public.staff_members (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null check (char_length(trim(name)) > 0 and char_length(name) <= 120),
+  role_display text check (char_length(role_display) <= 60),
+  monthly_salary numeric(14,2) not null default 0 check (monthly_salary >= 0),
+  display_order smallint not null default 0,
+  is_active boolean not null default true,
+  created_by uuid references auth.users (id) on delete set null,
+  created_at timestamp with time zone default timezone('utc'::text, now())
+);
+
+create index if not exists staff_members_display_order_idx on public.staff_members (display_order, name);
+
+comment on table public.staff_members is 'Pump staff who receive salary (e.g. supervisor + 4 operators). Used for installment salary tracking.';
+
+alter table public.staff_members enable row level security;
+
+drop policy if exists "staff_members_select_authenticated" on public.staff_members;
+create policy "staff_members_select_authenticated" on public.staff_members
+  for select to authenticated using (true);
+
+drop policy if exists "staff_members_insert_own_or_admin" on public.staff_members;
+create policy "staff_members_insert_own_or_admin" on public.staff_members
+  for insert to authenticated
+  with check (created_by = auth.uid() or public.is_admin());
+
+drop policy if exists "staff_members_update_by_role" on public.staff_members;
+create policy "staff_members_update_by_role" on public.staff_members
+  for update to authenticated
+  using (created_by = auth.uid() or public.is_admin())
+  with check (created_by = auth.uid() or public.is_admin());
+
+drop policy if exists "staff_members_delete_admin" on public.staff_members;
+create policy "staff_members_delete_admin" on public.staff_members
+  for delete to authenticated using (public.is_admin());
+
+-- Salary payments (installments: staff take salary in parts on different days)
+create table if not exists public.salary_payments (
+  id uuid primary key default uuid_generate_v4(),
+  staff_member_id uuid not null references public.staff_members (id) on delete restrict,
+  date date not null,
+  amount numeric(14,2) not null check (amount > 0),
+  note text check (char_length(note) <= 200),
+  created_by uuid references auth.users (id) on delete set null,
+  created_at timestamp with time zone default timezone('utc'::text, now())
+);
+
+create index if not exists salary_payments_staff_date_idx on public.salary_payments (staff_member_id, date desc);
+create index if not exists salary_payments_date_idx on public.salary_payments (date desc);
+
+comment on table public.salary_payments is 'Installment salary payments to staff. One row per payment (e.g. 2000 today, 3000 next week).';
+
+alter table public.salary_payments enable row level security;
+
+drop policy if exists "salary_payments_select_authenticated" on public.salary_payments;
+create policy "salary_payments_select_authenticated" on public.salary_payments
+  for select to authenticated using (true);
+
+drop policy if exists "salary_payments_insert_own" on public.salary_payments;
+create policy "salary_payments_insert_own" on public.salary_payments
+  for insert to authenticated with check (created_by = auth.uid());
+
+drop policy if exists "salary_payments_update_by_role" on public.salary_payments;
+create policy "salary_payments_update_by_role" on public.salary_payments
+  for update to authenticated
+  using (created_by = auth.uid() or public.is_admin())
+  with check (created_by = auth.uid() or public.is_admin());
+
+drop policy if exists "salary_payments_delete_admin" on public.salary_payments;
+create policy "salary_payments_delete_admin" on public.salary_payments
+  for delete to authenticated using (public.is_admin());
+
 -- Credit customers ledger
 create table if not exists public.credit_customers (
   id uuid primary key default uuid_generate_v4(),
@@ -578,4 +652,16 @@ drop trigger if exists audit_credit_delete_trigger on public.credit_customers;
 drop trigger if exists audit_credit_trigger on public.credit_customers;
 create trigger audit_credit_trigger
   after insert or update or delete on public.credit_customers
+  for each row execute function public.audit_trigger_fn();
+
+-- Staff members: full audit
+drop trigger if exists audit_staff_members_trigger on public.staff_members;
+create trigger audit_staff_members_trigger
+  after insert or update or delete on public.staff_members
+  for each row execute function public.audit_trigger_fn();
+
+-- Salary payments: full audit
+drop trigger if exists audit_salary_payments_trigger on public.salary_payments;
+create trigger audit_salary_payments_trigger
+  after insert or update or delete on public.salary_payments
   for each row execute function public.audit_trigger_fn();
