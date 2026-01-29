@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Staff Salary · Petrol Pump</title>
+    <link rel="stylesheet" href="css/base.css" />
+    <link rel="stylesheet" href="css/app.css" />
+    <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3"></script>
+    <script defer src="js/env.js"></script>
+    <script defer src="js/errorHandler.js"></script>
+    <script defer src="js/cache.js"></script>
+    <script defer src="js/utils.js"></script>
+    <script defer src="js/supabase.js"></script>
+    <script defer src="js/auth.js?v=2"></script>
+    <script defer src="js/salary.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>Staff Salary</h1>
+      <nav>
+        <a href="dashboard.html">Dashboard</a>
+        <a href="dsr.html">Daily Sales Report</a>
+        <a href="credit.html">Credit Ledger</a>
+        <a href="expenses.html">Expenses</a>
+        <a href="attendance.html">Attendance</a>
+        <a href="salary.html">Staff Salary</a>
+        <a href="analysis.html" data-role="admin-only" style="display:none">Analysis</a>
+        <a href="settings.html" data-role="admin-only" style="display:none">Settings</a>
+        <button id="logout-button" class="link">Logout</button>
+      </nav>
+    </header>
+
+    <main class="stack">
+      <section class="card">
+        <h2>Record salary payment</h2>
+        <p class="muted">When you give a staff member some amount (installment), record it here. You can add multiple payments per person per month.</p>
+        <form id="salary-payment-form" class="form" autocomplete="off">
+          <div class="form-grid">
+            <div class="form-field">
+              <label for="payment-staff">Staff</label>
+              <select id="payment-staff" name="staff_member_id" required>
+                <option value="">Select staff</option>
+              </select>
+            </div>
+            <div class="form-field">
+              <label for="payment-date">Date</label>
+              <input id="payment-date" name="date" type="date" required />
+            </div>
+            <div class="form-field">
+              <label for="payment-amount">Amount (₹)</label>
+              <input
+                id="payment-amount"
+                name="amount"
+                type="number"
+                min="0.01"
+                step="0.01"
+                placeholder="0"
+                required
+              />
+            </div>
+            <div class="form-field">
+              <label for="payment-note">Note</label>
+              <input
+                id="payment-note"
+                name="note"
+                type="text"
+                maxlength="200"
+                placeholder="e.g. Advance, Jan salary part 1"
+              />
+            </div>
+          </div>
+          <button type="submit">Save payment</button>
+          <p id="salary-payment-success" class="success hidden">Payment recorded.</p>
+          <p id="salary-payment-error" class="error hidden"></p>
+        </form>
+      </section>
+
+      <section class="card">
+        <div class="card-head snapshot-head">
+          <div>
+            <h2>Salary summary by month</h2>
+            <p class="muted">Paid = total payments in selected month. Pending = monthly salary − paid.</p>
+          </div>
+          <div class="snapshot-controls">
+            <div class="form-field">
+              <label for="salary-month">Month</label>
+              <input id="salary-month" type="month" />
+            </div>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Role</th>
+              <th>Monthly salary (₹)</th>
+              <th>Paid this month (₹)</th>
+              <th>Pending (₹)</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="salary-summary-body">
+            <tr>
+              <td colspan="6" class="muted">Loading…</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="card">
+        <h2>Recent payments</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Staff</th>
+              <th>Amount (₹)</th>
+              <th>Note</th>
+            </tr>
+          </thead>
+          <tbody id="salary-payments-body">
+            <tr>
+              <td colspan="4" class="muted">Loading…</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="card" id="manage-staff-section" data-role="admin-only">
+        <h2>Manage staff</h2>
+        <p class="muted">Add or edit staff who receive salary (e.g. 1 supervisor + 4 operators). Set monthly salary for each.</p>
+        <form id="staff-member-form" class="form" autocomplete="off">
+          <input type="hidden" id="staff-member-id" name="id" value="" />
+          <div class="form-grid">
+            <div class="form-field">
+              <label for="staff-name">Name</label>
+              <input
+                id="staff-name"
+                name="name"
+                type="text"
+                maxlength="120"
+                placeholder="Staff name"
+                required
+              />
+            </div>
+            <div class="form-field">
+              <label for="staff-role">Role</label>
+              <input
+                id="staff-role"
+                name="role_display"
+                type="text"
+                maxlength="60"
+                placeholder="e.g. Supervisor, Operator"
+              />
+            </div>
+            <div class="form-field">
+              <label for="staff-monthly-salary">Monthly salary (₹)</label>
+              <input
+                id="staff-monthly-salary"
+                name="monthly_salary"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0"
+                required
+              />
+            </div>
+          </div>
+          <button type="submit" id="staff-submit-btn">Add staff</button>
+          <button type="button" id="staff-cancel-btn" class="button-secondary hidden">Cancel</button>
+          <p id="staff-form-success" class="success hidden">Saved.</p>
+          <p id="staff-form-error" class="error hidden"></p>
+        </form>
+        <table class="margin-top">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Role</th>
+              <th>Monthly salary (₹)</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="staff-members-body">
+            <tr>
+              <td colspan="4" class="muted">Loading…</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </main>
+  </body>
+</html>
