@@ -10,7 +10,7 @@
     <script defer src="js/env.js"></script>
     <script defer src="js/errorHandler.js"></script>
     <script defer src="js/cache.js"></script>
-    <script defer src="js/utils.js"></script>
+    <script defer src="js/utils.js?v=3"></script>
     <script defer src="js/supabase.js"></script>
     <script defer src="js/auth.js?v=2"></script>
     <script defer src="js/dashboard.js"></script>
@@ -24,8 +24,9 @@
         <a href="credit.html">Credit Ledger</a>
         <a href="expenses.html">Expenses</a>
         <a href="attendance.html">Attendance</a>
-        <a href="analysis.html" data-role="admin-only">Analysis</a>
-        <a href="settings.html" data-role="admin-only">Settings</a>
+        <a href="salary.html">Staff Salary</a>
+        <a href="analysis.html" data-role="admin-only" style="display:none">Analysis</a>
+        <a href="settings.html" data-role="admin-only" style="display:none">Settings</a>
         <button id="logout-button" class="link">Logout</button>
       </nav>
     </header>
@@ -75,7 +76,7 @@
         </div>
 
         <div class="grid">
-          <a class="card-link" href="sales-daily.html">
+          <a id="sales-daily-link" class="card-link" href="sales-daily.html">
             <article class="card highlight-card clickable-card">
               <h3>Total Sale</h3>
               <div class="stat-grid">
@@ -113,8 +114,9 @@
           <div class="form-field">
             <label for="dsr-range">Range</label>
             <select id="dsr-range">
+              <option value="today" selected>Today</option>
               <option value="this-week">This week</option>
-              <option value="this-month" selected>This month</option>
+              <option value="this-month">This month</option>
               <option value="custom">Custom dates</option>
             </select>
           </div>
@@ -202,8 +204,9 @@
           <div class="form-field">
             <label for="pl-range">Range</label>
             <select id="pl-range">
+              <option value="today" selected>Today</option>
               <option value="this-week">This week</option>
-              <option value="this-month" selected>This month</option>
+              <option value="this-month">This month</option>
               <option value="custom">Custom dates</option>
             </select>
           </div>
