@@ -31,6 +31,7 @@ function getFilterState(key) {
 function getValidFilterState(key, allowedRanges) {
   const data = getFilterState(key);
   if (!data || !allowedRanges.has(data.range)) return null;
+  if (data.range === "date" && !data.start) return null;
   if (data.range === "custom" && (!data.start || !data.end)) return null;
   return data;
 }

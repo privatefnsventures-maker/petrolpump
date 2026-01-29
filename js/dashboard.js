@@ -116,18 +116,37 @@ document.addEventListener("DOMContentLoaded", async () => {
   const todayStr = new Date().toISOString().slice(0, 10);
   
   const enforceRateFieldsReadOnly = () => {
-    // Rates are always computed from DSR entries; keep them read-only.
     if (petrolRateInput) petrolRateInput.readOnly = true;
     if (dieselRateInput) dieselRateInput.readOnly = true;
   };
-  
+
+  const SNAPSHOT_RANGE = new Set(["date"]);
+  const storedSnapshot = typeof window.getValidFilterState === "function"
+    ? window.getValidFilterState("dashboard_snapshot", SNAPSHOT_RANGE)
+    : null;
+  const snapshotDateStr = storedSnapshot?.start || todayStr;
   if (snapshotDateInput) {
-    snapshotDateInput.value = todayStr;
-    enforceRateFieldsReadOnly(); // Set initial state
-    
+    snapshotDateInput.value = snapshotDateStr;
+    enforceRateFieldsReadOnly();
+    window.setFilterState && window.setFilterState("dashboard_snapshot", { range: "date", start: snapshotDateStr });
+    const updateSalesDailyLink = () => {
+      const link = document.getElementById("sales-daily-link");
+      if (link) link.href = "sales-daily.html?date=" + (snapshotDateInput.value || todayStr);
+    };
+    updateSalesDailyLink();
+    const salesDailyLink = document.getElementById("sales-daily-link");
+    if (salesDailyLink) {
+      salesDailyLink.addEventListener("click", () => {
+        try {
+          sessionStorage.setItem("petrolpump_sales_daily_from_dashboard", snapshotDateInput.value || todayStr);
+        } catch (_) {}
+      });
+    }
     snapshotDateInput.addEventListener("change", async () => {
       const dateValue = snapshotDateInput.value || todayStr;
       enforceRateFieldsReadOnly();
+      window.setFilterState && window.setFilterState("dashboard_snapshot", { range: "date", start: dateValue });
+      updateSalesDailyLink();
       await Promise.all([loadTodaySales(dateValue), loadCreditSummary(dateValue)]);
     });
   }
@@ -135,8 +154,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   try {
     await Promise.all([
-      loadTodaySales(todayStr),
-      loadCreditSummary(todayStr),
+      loadTodaySales(snapshotDateStr),
+      loadCreditSummary(snapshotDateStr),
       initializeDsrDashboard(),
       initializeProfitLossFilter(),
       loadRecentActivity(),
