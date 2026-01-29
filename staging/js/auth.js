@@ -8,7 +8,7 @@ const logoutButton = document.getElementById("logout-button");
 const DEFAULT_ROLE = "admin";
 const LANDING_BY_ROLE = {
   admin: "dashboard.html",
-  supervisor: "credit.html",
+  supervisor: "dashboard.html",
 };
 
 /**
@@ -255,6 +255,9 @@ async function requireAuth(options = {}) {
 function applyRoleVisibility(role) {
   if (role === "admin") {
     document.body.classList.add("role-admin");
+    document.querySelectorAll("[data-role='admin-only']").forEach((el) => {
+      el.style.display = "";
+    });
   } else {
     document.body.classList.remove("role-admin");
     document
