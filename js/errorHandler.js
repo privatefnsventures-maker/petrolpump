@@ -186,7 +186,7 @@
    * @param {{ maxAttempts?: number, baseMs?: number, maxMs?: number, isRetryable?: (err: unknown) => boolean }} options
    * @returns {Promise<T>}
    */
-  function withRetry(fn, options) {
+  async function withRetry(fn, options) {
     const maxAttempts = options && options.maxAttempts != null ? options.maxAttempts : 3;
     const baseMs = options && options.baseMs != null ? options.baseMs : 500;
     const maxMs = options && options.maxMs != null ? options.maxMs : 10000;

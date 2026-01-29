@@ -1,4 +1,4 @@
-/* global requireAuth, applyRoleVisibility, supabaseClient, formatCurrency, AppError */
+/* global requireAuth, applyRoleVisibility, supabaseClient, formatCurrency, AppError, getValidFilterState, setFilterState */
 
 document.addEventListener("DOMContentLoaded", async () => {
   const auth = await requireAuth({
@@ -566,8 +566,19 @@ async function initAnalysisPage() {
 
   if (!rangeSelect || !form || !customRange) return;
 
-  const allowed = new Set(["this-week", "this-month", "last-3-months", "custom"]);
-  if (!allowed.has(rangeSelect.value)) rangeSelect.value = "this-month";
+  const ANALYSIS_RANGES = new Set(["this-week", "this-month", "last-3-months", "custom"]);
+  const stored = typeof window.getValidFilterState === "function"
+    ? window.getValidFilterState("analysis", ANALYSIS_RANGES)
+    : null;
+  if (stored) {
+    rangeSelect.value = stored.range;
+    if (stored.range === "custom" && stored.start && stored.end && startInput && endInput) {
+      startInput.value = stored.start;
+      endInput.value = stored.end;
+    }
+  } else if (!ANALYSIS_RANGES.has(rangeSelect.value)) {
+    rangeSelect.value = "this-month";
+  }
 
   const isCustom = rangeSelect.value === "custom";
   setCustomRangeVisibility(customRange, startInput, endInput, isCustom);
@@ -584,6 +595,14 @@ async function initAnalysisPage() {
   );
   if (initialRange) await loadAndRender(initialRange);
 
+  const saveAnalysisFilter = () => {
+    window.setFilterState && window.setFilterState("analysis", {
+      range: rangeSelect.value,
+      start: startInput?.value || undefined,
+      end: endInput?.value || undefined,
+    });
+  };
+
   rangeSelect.addEventListener("change", async () => {
     const isCustom = rangeSelect.value === "custom";
     setCustomRangeVisibility(customRange, startInput, endInput, isCustom);
@@ -592,14 +611,12 @@ async function initAnalysisPage() {
       if (startInput) startInput.value = formatDateInput(today);
       if (endInput) endInput.value = formatDateInput(today);
     }
-    const range = getRangeForSelection(
-      rangeSelect.value,
-      startInput,
-      endInput
-    );
+    saveAnalysisFilter();
+    const range = getRangeForSelection(rangeSelect.value, startInput, endInput);
     if (!range) return;
     updateAnalysisDateLabel(range, range.modeInfo);
     await loadAndRender(range);
+    if (isCustom) saveAnalysisFilter();
   });
 
   form.addEventListener("submit", async (e) => {
@@ -615,6 +632,7 @@ async function initAnalysisPage() {
     );
     if (!range) return;
     await loadAndRender(range);
+    saveAnalysisFilter();
   });
 
   if (startInput && endInput) {
@@ -628,6 +646,7 @@ async function initAnalysisPage() {
       );
       if (!range) return;
       await loadAndRender(range);
+      saveAnalysisFilter();
     };
     startInput.addEventListener("change", onCustomChange);
     endInput.addEventListener("change", onCustomChange);
