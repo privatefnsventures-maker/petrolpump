@@ -21,7 +21,7 @@ function getDashboardCacheKey(startDate, endDate) {
  * Generate cache key for today's sales
  */
 function getTodaySalesCacheKey(dateStr) {
-  return `today_sales_${dateStr}`;
+  return `today_sales_net_${dateStr}`;
 }
 
 /**
@@ -296,7 +296,7 @@ async function loadTodaySales(dateStr) {
   const fetchFn = async () => {
     const { data, error } = await supabaseClient
       .from("dsr")
-      .select("product, total_sales, petrol_rate, diesel_rate")
+      .select("product, total_sales, testing, petrol_rate, diesel_rate")
       .eq("date", selectedDate);
 
     if (error) {
@@ -346,10 +346,17 @@ function renderTodaySales(data, selectedDate, todayStat, todayRupees, todayDate,
 
   snapshotDsrRows = data;
 
-  const totalLiters = snapshotDsrRows.reduce(
-    (sum, row) => sum + Number(row.total_sales ?? 0),
-    0
+  const petrolNetSale = sumByProduct(
+    snapshotDsrRows,
+    "petrol",
+    (row) => Number(row.total_sales ?? 0) - Number(row.testing ?? 0)
   );
+  const dieselNetSale = sumByProduct(
+    snapshotDsrRows,
+    "diesel",
+    (row) => Number(row.total_sales ?? 0) - Number(row.testing ?? 0)
+  );
+  const totalLiters = petrolNetSale + dieselNetSale;
 
   // Fetch and set rates from DSR data (if columns exist)
   const petrolEntry = snapshotDsrRows.find(
@@ -419,12 +426,12 @@ function updateTotalSaleRupees() {
   const petrolLiters = sumByProduct(
     snapshotDsrRows,
     "petrol",
-    (row) => row.total_sales
+    (row) => Number(row.total_sales ?? 0) - Number(row.testing ?? 0)
   );
   const dieselLiters = sumByProduct(
     snapshotDsrRows,
     "diesel",
-    (row) => row.total_sales
+    (row) => Number(row.total_sales ?? 0) - Number(row.testing ?? 0)
   );
   
   const totalAmount = petrolLiters * petrolRate + dieselLiters * dieselRate;
