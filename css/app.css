@@ -1,5 +1,16 @@
 /* App shell: dashboard, DSR, credit, expenses, attendance, analysis, settings */
 
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+.checkbox-label input[type="checkbox"] {
+  flex-shrink: 0;
+}
+
 tbody tr:hover {
   background: #f8fafc;
 }
@@ -46,19 +57,20 @@ tbody tr:hover {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  margin-top: 1rem;
-  padding-top: 1rem;
-  border-top: 1px solid #e2e8f0;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
 }
 
 .pagination-info {
-  font-size: 0.9rem;
+  font-size: var(--text-base);
 }
 
 .pagination-controls button {
-  padding: 0.5rem 1.25rem;
-  font-size: 0.9rem;
+  min-height: var(--input-height);
+  padding: 0 var(--space-3);
+  font-size: var(--text-base);
 }
 
 @media (max-width: 480px) {
@@ -89,7 +101,9 @@ tbody tr:hover {
 
 .dsr-card-head h2 {
   margin: 0;
-  font-size: 1.35rem;
+  font-size: var(--heading-lg);
+  font-weight: 600;
+  color: #0f172a;
 }
 
 .dsr-card-head p {
@@ -116,34 +130,32 @@ tbody tr:hover {
 
 .dsr-table th,
 .dsr-table td {
-  border: 1px solid #e2e8f0;
-  padding: 0.65rem 0.55rem;
+  border: 1px solid var(--border);
+  padding: var(--space-2) var(--space-3);
   text-align: center;
-  font-size: 0.85rem;
-  background: #fff;
+  font-size: var(--text-base);
+  background: var(--surface);
 }
 
 .dsr-table thead th {
-  background: #f1f5f9;
-  color: #1f2933;
+  background: #f8fafc;
+  color: #1e293b;
   font-weight: 600;
-}
-
-.dsr-table thead tr:first-child th {
-  font-size: 0.78rem;
+  font-size: var(--text-sm);
   text-transform: uppercase;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.03em;
 }
 
 .dsr-table thead tr:nth-child(2) th {
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
   font-weight: 600;
 }
 
 .dsr-table input {
   width: 100%;
   box-sizing: border-box;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
+  min-height: var(--input-height);
 }
 
 .dsr-table input[type="date"] {
@@ -167,6 +179,74 @@ tbody tr:hover {
   color: #475569;
 }
 
+/* DSR day summary (total net sale, expenses, credit, in hand) */
+.dsr-summary-card {
+  margin-top: 1.25rem;
+}
+
+.dsr-summary-card h3 {
+  margin: 0 0 0.5rem;
+}
+
+.dsr-summary-list {
+  display: grid;
+  gap: 0.5rem;
+  margin: 1rem 0 0.5rem;
+  padding: 0;
+  list-style: none;
+}
+
+.dsr-summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.dsr-summary-row dt {
+  margin: 0;
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: #475569;
+}
+
+.dsr-summary-row dd {
+  margin: 0;
+  font-size: var(--text-base);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.dsr-summary-inhand dd {
+  font-size: 1.25rem;
+}
+
+/* Day closing & short */
+.day-closing-card .day-closing-form {
+  margin-top: 0.75rem;
+}
+.day-closing-breakdown {
+  margin: 1rem 0;
+}
+.day-closing-breakdown .dsr-summary-row dd input {
+  width: 8rem;
+  max-width: 100%;
+  text-align: right;
+  padding: 0.35rem 0.5rem;
+}
+.day-closing-breakdown .dsr-summary-row.dc-subtotal {
+  border-top: 1px solid #cbd5e1;
+  margin-top: 0.25rem;
+  padding-top: 0.5rem;
+  font-weight: 700;
+}
+.day-closing-card .form-actions {
+  margin-top: 1rem;
+  gap: 0.75rem;
+}
+
 .meter-stack {
   display: flex;
   flex-direction: column;
@@ -177,6 +257,23 @@ tbody tr:hover {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+}
+
+.meter-block-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.meter-block-head .meter-title {
+  margin: 0;
+}
+
+.meter-block-head .dsr-copy-prev {
+  font-size: 0.85rem;
+  padding: 0.4rem 0.75rem;
 }
 
 .meter-title {
@@ -307,19 +404,29 @@ tbody tr:hover {
 }
 
 /* Analysis page */
+.analysis-hero h2 {
+  font-size: var(--heading-lg);
+  font-weight: 600;
+  color: #f1f5f9;
+  margin: 0;
+}
+
 .analysis-hero p {
-  margin: 0.35rem 0 0;
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-base);
+  color: #cbd5e1;
 }
 
 .analysis-section-title {
-  margin: 0 0 0.25rem;
-  font-size: 1.2rem;
-  color: #1f2933;
+  margin: 0 0 var(--space-1);
+  font-size: var(--heading-md);
+  font-weight: 600;
+  color: #f1f5f9;
 }
 
 .analysis-section-desc {
-  margin: 0 0 0.75rem;
-  font-size: 0.9rem;
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-base);
 }
 
 .analysis-kpi-grid {
@@ -351,16 +458,16 @@ tbody tr:hover {
 
 .analysis-kpi--compact .stat-tile .stat,
 .analysis-kpi--compact .stat {
-  font-size: 1.2rem;
+  font-size: 1.25rem;
 }
 
 .analysis-kpi--compact h3 {
-  font-size: 0.9rem;
-  margin-bottom: 0.35rem;
+  font-size: var(--heading-sm);
+  margin-bottom: var(--space-1);
 }
 
 .analysis-kpi--compact small {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 
 .analysis-insights-card {
@@ -397,4 +504,531 @@ tbody tr:hover {
 .chart-wrap--half {
   max-width: 360px;
   height: 260px;
+}
+
+/* P&L: todo banner when receipt days need buying price */
+.pl-todo-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: #dbeafe;
+  border: 1px solid #93c5fd;
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
+}
+
+.pl-todo-banner.hidden {
+  display: none;
+}
+
+.pl-todo-message {
+  margin: 0;
+  flex: 1;
+  min-width: 200px;
+  font-size: var(--text-base);
+}
+
+.pl-todo-goto {
+  flex-shrink: 0;
+}
+
+/* P&L: buying price notification for receipt days */
+.pl-buying-price-alert {
+  margin-bottom: 1rem;
+  padding: 1rem;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 10px;
+}
+
+.pl-buying-price-alert.hidden {
+  display: none;
+}
+
+.pl-alert-message {
+  margin: 0 0 0.75rem 0;
+  font-size: 0.95rem;
+}
+
+.pl-missing-buying-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.pl-missing-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.pl-missing-label {
+  min-width: 140px;
+  font-size: 0.9rem;
+}
+
+.pl-buying-input {
+  width: 6rem;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.9rem;
+}
+
+.pl-buying-save {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.9rem;
+}
+
+.pl-buying-save.pl-save-success {
+  color: #059669;
+}
+
+.pl-profit-hint {
+  margin: 0.25rem 0 0 0;
+  font-size: 0.8rem;
+}
+
+.pl-profit-hint.hidden {
+  display: none;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ==========================================================================
+   Dashboard page – welcome strip + left sidebar notifications
+   ========================================================================== */
+.dashboard-page {
+  max-width: min(1280px, 98vw);
+  margin-left: auto;
+  margin-right: auto;
+  padding: 0 var(--space-3);
+}
+
+/* Welcome strip: top highlight – name only then role; starts left, extends full width */
+.dashboard-welcome-strip {
+  display: flex;
+  align-items: center;
+  padding: var(--space-3) var(--space-4) var(--space-3) var(--space-5);
+  margin: 0 calc(-1 * var(--space-3)) var(--space-4);
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border: 1px solid #bae6fd;
+  border-radius: var(--radius-md);
+  box-shadow: 0 1px 3px rgba(14, 165, 233, 0.08);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.dashboard-welcome-text {
+  font-size: var(--text-lg);
+  font-weight: 500;
+  color: #0c4a6e;
+  text-align: left;
+}
+
+.dashboard-operator-name {
+  font-weight: 700;
+  color: #0369a1;
+}
+
+.dashboard-operator-role {
+  font-weight: 600;
+  color: #0284c7;
+  font-size: var(--text-base);
+}
+
+/* Layout: main (hero) first, notifications sidebar on the right */
+.dashboard-layout {
+  display: flex;
+  flex-direction: row;
+  gap: var(--space-5);
+  align-items: flex-start;
+}
+
+.dashboard-main {
+  flex: 1;
+  min-width: 0;
+  max-width: min(900px, 100%);
+  order: 1;
+}
+
+.dashboard-sidebar {
+  flex-shrink: 0;
+  width: 280px;
+  position: sticky;
+  top: var(--space-3);
+  order: 2;
+}
+
+.dashboard-sidebar-title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--heading-sm);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.dashboard-sidebar-inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* Today's price in sidebar */
+.notification-block {
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+}
+
+.notification-block-title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--heading-sm);
+  font-weight: 600;
+  color: #334155;
+}
+
+.notification-rate-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.notification-rate-fields .form-field {
+  min-width: 0;
+}
+
+.notification-rate-fields input {
+  font-variant-numeric: tabular-nums;
+}
+
+
+/* Sidebar: status bar (today's sale / open credit / net cash) */
+.dashboard-status-bar {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+}
+
+.dashboard-status-bar.hidden {
+  display: none;
+}
+
+.at-a-glance-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  grid-template-columns: unset;
+}
+
+.at-a-glance-sidebar.hidden {
+  display: none;
+}
+
+.dashboard-status-bar .at-a-glance-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  margin: 0;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.dashboard-status-bar .at-a-glance-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.dashboard-status-bar .at-a-glance-item .label {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  margin: 0;
+  font-weight: 500;
+}
+
+.dashboard-status-bar .at-a-glance-item .value {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Day closing: separate banner per day, no title, left-aligned */
+.day-closing-block {
+  margin-top: var(--space-3);
+}
+
+.day-closing-block.hidden {
+  display: none;
+}
+
+.day-closing-block #day-closing-banners {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.day-closing-block .day-closing-banner {
+  margin: 0;
+}
+
+.day-closing-block .day-closing-cta {
+  margin: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.day-closing-block .day-closing-cta .cta-text {
+  font-size: var(--text-sm);
+  text-align: left;
+}
+
+.day-closing-block .day-closing-cta-btn {
+  text-align: left;
+  align-self: flex-start;
+}
+
+/* When day closing is done, hide the action link */
+.day-closing-block .day-closing-cta.done .day-closing-cta-btn {
+  display: none;
+}
+
+/* Sidebar: alerts */
+.dashboard-alerts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: 0;
+}
+
+.dashboard-alerts .low-stock-alert,
+.dashboard-alerts .smart-alert {
+  margin-bottom: 0;
+}
+
+.dashboard-alerts .low-stock-alert.hidden,
+.dashboard-alerts .smart-alerts-panel.hidden {
+  display: none;
+}
+
+.dashboard-alerts.dashboard-alerts-empty {
+  display: none;
+  margin-bottom: 0;
+}
+
+@media (max-width: 900px) {
+  .dashboard-layout {
+    flex-direction: column;
+  }
+
+  .dashboard-main {
+    max-width: 100%;
+  }
+
+  .dashboard-sidebar {
+    width: 100%;
+    position: static;
+    order: 2;
+  }
+
+  .dashboard-welcome-strip {
+    margin-left: 0;
+    margin-right: 0;
+  }
+}
+
+.dashboard-page .dashboard-card {
+  margin-bottom: 1.5rem;
+}
+
+.dashboard-page .dashboard-card:last-of-type {
+  margin-bottom: 2rem;
+}
+
+.dashboard-section-title {
+  margin: 0;
+  font-size: var(--heading-lg);
+  font-weight: 600;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+}
+
+.dashboard-subtitle {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: #334155;
+}
+
+.dashboard-muted-caption {
+  margin: var(--space-1) 0 var(--space-2);
+  font-size: var(--text-base);
+  color: var(--text-muted);
+}
+
+/* Snapshot: title + date + optional rates in one row */
+.dashboard-page .snapshot-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.dashboard-page .snapshot-head .dashboard-section-title {
+  margin-right: 0;
+}
+
+.dashboard-page .snapshot-controls,
+.dashboard-page .dsr-filter-inline {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  margin: 0;
+}
+
+.form-field-inline {
+  min-width: 0;
+}
+
+.form-field-inline label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: #475569;
+}
+
+.snapshot-details {
+  font-size: var(--text-base);
+  color: var(--text-muted);
+}
+
+.snapshot-details summary {
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.snapshot-rate-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 0.5rem;
+  padding-left: 0.5rem;
+}
+
+.snapshot-rate-fields .form-field {
+  min-width: 120px;
+}
+
+/* DSR / P&L: title + filter on one line – same as snapshot-controls */
+.dsr-card-head-inline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  margin-bottom: 0;
+}
+
+.dsr-filter-inline .form-field,
+.dsr-filter-inline .form-field-inline {
+  margin: 0;
+  min-width: 10rem;
+}
+
+.dsr-filter-inline .custom-range {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: flex-end;
+}
+
+.dsr-filter-inline .custom-range.hidden {
+  display: none;
+}
+
+.dsr-filter-inline button[type="submit"],
+.dsr-filter button[type="submit"] {
+  min-height: var(--input-height);
+  padding: 0 var(--space-3);
+  font-size: var(--text-base);
+}
+
+/* Snapshot cards: tighter grid */
+.dashboard-snapshot-grid {
+  margin-top: 0;
+}
+
+.dashboard-page .highlight-card h3,
+.dashboard-page .fuel-card h3 {
+  font-size: var(--heading-md);
+  margin-bottom: var(--space-1);
+  font-weight: 600;
+  color: #334155;
+}
+
+.dashboard-page .stat-tile h3,
+.dashboard-page .stat-tile h4 {
+  font-size: var(--heading-sm);
+  color: var(--text-muted);
+}
+
+.dashboard-page .stat-tile .stat.stat-sub {
+  font-size: 1.25rem;
+}
+
+/* Day summary compact */
+.dsr-summary-compact {
+  padding: 1rem 1.25rem;
+}
+
+.dsr-summary-compact .dsr-summary-list {
+  margin: 0;
+}
+
+.dsr-summary-compact .dsr-summary-row {
+  padding: 0.25rem 0;
+}
+
+/* Day closing card: compact */
+.dashboard-page .day-closing-card .day-closing-form {
+  margin-top: 0.5rem;
+}
+
+.dashboard-page .day-closing-card .day-closing-breakdown {
+  margin: 0.75rem 0;
+}
+
+.dashboard-page .day-closing-card .form-actions {
+  margin-top: 0.75rem;
 }

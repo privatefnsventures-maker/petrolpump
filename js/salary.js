@@ -257,6 +257,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (paymentForm) {
     paymentForm.addEventListener("submit", async (e) => {
       e.preventDefault();
+      const submitBtn = paymentForm.querySelector('button[type="submit"]');
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Saving…";
+      }
       paymentSuccess?.classList.add("hidden");
       paymentError?.classList.add("hidden");
 
@@ -266,11 +271,13 @@ document.addEventListener("DOMContentLoaded", async () => {
       const note = document.getElementById("payment-note")?.value?.trim() || null;
 
       if (!staffId) {
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Save payment"; }
         paymentError?.classList.remove("hidden");
         if (paymentError) paymentError.textContent = "Select a staff member.";
         return;
       }
       if (amount <= 0) {
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Save payment"; }
         paymentError?.classList.remove("hidden");
         if (paymentError) paymentError.textContent = "Amount must be greater than 0.";
         return;
@@ -286,6 +293,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       const { error } = await supabaseClient.from("salary_payments").insert(payload);
 
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Save payment";
+      }
       if (error) {
         AppError.handle(error, { target: paymentError });
         return;
@@ -320,6 +331,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (staffMemberForm) {
     staffMemberForm.addEventListener("submit", async (e) => {
       e.preventDefault();
+      if (staffSubmitBtn) {
+        staffSubmitBtn.disabled = true;
+        staffSubmitBtn.textContent = "Saving…";
+      }
       staffFormSuccess?.classList.add("hidden");
       staffFormError?.classList.add("hidden");
 
@@ -343,12 +358,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       if (id) {
         const { error } = await supabaseClient.from("staff_members").update(payload).eq("id", id);
+        if (staffSubmitBtn) { staffSubmitBtn.disabled = false; staffSubmitBtn.textContent = staffCancelBtn?.classList.contains("hidden") ? "Add staff" : "Update"; }
         if (error) {
           AppError.handle(error, { target: staffFormError });
           return;
         }
       } else {
         const { error } = await supabaseClient.from("staff_members").insert(payload);
+        if (staffSubmitBtn) { staffSubmitBtn.disabled = false; staffSubmitBtn.textContent = "Add staff"; }
         if (error) {
           AppError.handle(error, { target: staffFormError });
           return;
@@ -357,7 +374,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       staffMemberForm.reset();
       document.getElementById("staff-member-id").value = "";
-      if (staffSubmitBtn) staffSubmitBtn.textContent = "Add staff";
+      if (staffSubmitBtn) {
+        staffSubmitBtn.disabled = false;
+        staffSubmitBtn.textContent = "Add staff";
+      }
       if (staffCancelBtn) staffCancelBtn.classList.add("hidden");
       staffFormSuccess?.classList.remove("hidden");
       await refreshAll();
@@ -370,6 +390,40 @@ document.addEventListener("DOMContentLoaded", async () => {
       document.getElementById("staff-member-id").value = "";
       if (staffSubmitBtn) staffSubmitBtn.textContent = "Add staff";
       staffCancelBtn.classList.add("hidden");
+    });
+  }
+
+  const downloadCsvBtn = document.getElementById("salary-download-csv");
+  if (downloadCsvBtn) {
+    downloadCsvBtn.addEventListener("click", async () => {
+      const monthVal = salaryMonthInput?.value;
+      if (!monthVal) {
+        return;
+      }
+      await loadStaffMembers();
+      const [year, month] = monthVal.split("-").map(Number);
+      const { start, end } = getMonthStartEnd(year, month);
+      const payments = await loadPaymentsInRange(start, end);
+      const paidMap = paidByStaffInRange(payments);
+      const headers = ["Name", "Role", "Monthly salary (₹)", "Paid this month (₹)", "Pending (₹)"];
+      const rows = staffList.map((s) => {
+        const paid = paidMap.get(s.id) || 0;
+        const pending = Math.max(0, Number(s.monthly_salary ?? 0) - paid);
+        return [
+          String(s.name ?? "").replace(/"/g, '""'),
+          String(s.role_display ?? "").replace(/"/g, '""'),
+          String(s.monthly_salary ?? 0),
+          String(paid),
+          String(pending),
+        ];
+      });
+      const csv = [headers.join(","), ...rows.map((r) => r.map((c) => `"${c}"`).join(","))].join("\n");
+      const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `salary-summary-${monthVal}.csv`;
+      a.click();
+      URL.revokeObjectURL(a.href);
     });
   }
 

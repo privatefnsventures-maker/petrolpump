@@ -33,12 +33,17 @@ document.addEventListener("DOMContentLoaded", async () => {
 async function handleCreditSubmit(event, currentUserId) {
   event.preventDefault();
 
+  const form = event.currentTarget;
+  const submitBtn = form.querySelector('button[type="submit"]');
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Saving…";
+  }
   const successEl = document.getElementById("credit-success");
   const errorEl = document.getElementById("credit-error");
   successEl?.classList.add("hidden");
   errorEl?.classList.add("hidden");
 
-  const form = event.currentTarget;
   const formData = new FormData(form);
 
   const payload = {
@@ -57,11 +62,19 @@ async function handleCreditSubmit(event, currentUserId) {
     .insert(payload);
 
   if (error) {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Save credit entry";
+    }
     AppError.handle(error, { target: errorEl });
     return;
   }
 
   form.reset();
+  if (submitBtn) {
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Save credit entry";
+  }
   successEl?.classList.remove("hidden");
   loadCreditLedger(true); // Reset pagination to show new entry at top
   
@@ -171,7 +184,7 @@ async function loadCreditLedger(reset = false) {
 
     // Handle empty data
     if (reset && !fetchedCount) {
-      tbody.innerHTML = "<tr><td colspan='6' class='muted'>No credit customers recorded yet.</td></tr>";
+      tbody.innerHTML = "<tr><td colspan='6'><div class='empty-state'><p>No credit customers recorded yet.</p><p class='empty-cta'><a href='#credit-form'>Record credit sale above</a>.</p></div></td></tr>";
       creditPagination.isLoading = false;
       updatePaginationUI();
       return;
@@ -280,26 +293,27 @@ document.addEventListener("click", async (e) => {
 
   const current = Number(currentRow.amount_due) || 0;
   const settleAmount = Math.min(paid, current);
-  const newAmount = Number((current - settleAmount).toFixed(2));
+  if (settleAmount <= 0) {
+    msg.textContent = "Amount must be positive and not more than due";
+    return;
+  }
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = typeof getLocalDateString === "function" ? getLocalDateString() : new Date().toISOString().slice(0, 10);
   btn.disabled = true;
-  const { data: updatedRows, error: updateErr } = await supabaseClient
-    .from("credit_customers")
-    .update({ amount_due: newAmount, last_payment: today })
-    .eq("id", id)
-    .select();
+  const { data: rpcData, error: updateErr } = await supabaseClient.rpc("record_credit_payment", {
+    p_credit_customer_id: id,
+    p_date: today,
+    p_amount: settleAmount,
+    p_note: null,
+  });
   btn.disabled = false;
-
-  console.debug("settle update result", { id, updatedRows, updateErr });
 
   if (updateErr) {
     msg.textContent = AppError.getUserMessage(updateErr);
     AppError.report(updateErr, { context: "creditSettle" });
     return;
   }
-  // update row in-place and show whether fully settled
-  const remaining = newAmount;
+  const remaining = Number(rpcData?.new_due ?? 0);
   const tr = btn.closest("tr");
   const amountCell = tr && tr.querySelector("td[data-amount]");
   if (amountCell) {

@@ -108,11 +108,13 @@ function setCustomRangeVisibility(container, startInput, endInput, isVisible) {
 
 // --- Data fetch ---
 
+const RECEIPT_HISTORY_START = "2000-01-01";
+
 async function fetchAnalysisData(startDate, endDate) {
-  const [dsrResult, expenseResult] = await Promise.all([
+  const [dsrResult, expenseResult, receiptResult] = await Promise.all([
     supabaseClient
       .from("dsr")
-      .select("date, product, total_sales, testing, petrol_rate, diesel_rate")
+      .select("date, product, total_sales, testing, petrol_rate, diesel_rate, receipts, buying_price_per_litre")
       .gte("date", startDate)
       .lte("date", endDate)
       .order("date", { ascending: true }),
@@ -121,14 +123,24 @@ async function fetchAnalysisData(startDate, endDate) {
       .select("date, amount")
       .gte("date", startDate)
       .lte("date", endDate),
+    supabaseClient
+      .from("dsr")
+      .select("date, product, buying_price_per_litre")
+      .gte("date", RECEIPT_HISTORY_START)
+      .lte("date", endDate)
+      .gt("receipts", 0)
+      .not("buying_price_per_litre", "is", null)
+      .order("date", { ascending: false }),
   ]);
 
   if (dsrResult.error) AppError.report(dsrResult.error, { context: "fetchAnalysisData", type: "dsr" });
   if (expenseResult.error) AppError.report(expenseResult.error, { context: "fetchAnalysisData", type: "expenses" });
+  if (receiptResult.error) AppError.report(receiptResult.error, { context: "fetchAnalysisData", type: "receipt" });
 
   return {
     dsrData: dsrResult.data ?? [],
     expenseData: expenseResult.data ?? [],
+    receiptRows: receiptResult.data ?? [],
   };
 }
 
@@ -137,9 +149,34 @@ function normalizeProduct(value) {
 }
 
 /**
- * Build daily series: for each date in [start, end], compute sales (₹), expenses (₹), profit (₹), petrol L, diesel L.
+ * Build map: for each (product, date) return effective buying price (₹/L) from latest receipt row on or before that date.
+ * receiptRows: { date, product, buying_price_per_litre } sorted by date desc per product.
  */
-function buildDailySeries(dsrData, expenseData, startDate, endDate) {
+function buildEffectiveBuyingMap(receiptRows) {
+  const byProduct = new Map();
+  (receiptRows ?? []).forEach((row) => {
+    const p = normalizeProduct(row.product);
+    if (!byProduct.has(p)) byProduct.set(p, []);
+    byProduct.get(p).push({
+      date: row.date,
+      buying_price_per_litre: Number(row.buying_price_per_litre),
+    });
+  });
+  byProduct.forEach((list) => list.sort((a, b) => b.date.localeCompare(a.date)));
+  return function getEffectiveBuying(product, date) {
+    const list = byProduct.get(normalizeProduct(product));
+    if (!list || list.length === 0) return null;
+    const found = list.find((r) => r.date <= date);
+    return found != null && Number.isFinite(found.buying_price_per_litre) ? found.buying_price_per_litre : null;
+  };
+}
+
+/**
+ * Build daily series: for each date in [start, end], compute sales (₹), cost (₹), expenses (₹), profit (₹), petrol L, diesel L.
+ * Profit = sales - cost (using effective buying price from last receipt till next) - expenses.
+ */
+function buildDailySeries(dsrData, expenseData, receiptRows, startDate, endDate) {
+  const getEffectiveBuying = buildEffectiveBuyingMap(receiptRows);
   const byDate = new Map();
   const start = new Date(`${startDate}T00:00:00`);
   const end = new Date(`${endDate}T00:00:00`);
@@ -148,6 +185,7 @@ function buildDailySeries(dsrData, expenseData, startDate, endDate) {
     byDate.set(key, {
       date: key,
       salesRupees: 0,
+      costRupees: 0,
       expenseRupees: 0,
       petrolL: 0,
       dieselL: 0,
@@ -166,8 +204,11 @@ function buildDailySeries(dsrData, expenseData, startDate, endDate) {
         ? Number(row.petrol_rate ?? 0)
         : Number(row.diesel_rate ?? 0);
     const revenue = Number.isFinite(rate) && rate > 0 ? netSale * rate : 0;
+    const buyingPrice = getEffectiveBuying(row.product, row.date);
+    const cost = buyingPrice != null && Number.isFinite(buyingPrice) ? netSale * buyingPrice : 0;
     const entry = byDate.get(key);
     entry.salesRupees += revenue;
+    entry.costRupees += cost;
     if (normalizeProduct(row.product) === "petrol") {
       entry.petrolL += netSale;
       entry.petrolRupees += revenue;
@@ -187,7 +228,7 @@ function buildDailySeries(dsrData, expenseData, startDate, endDate) {
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([, v]) => ({
       ...v,
-      profitRupees: v.salesRupees - v.expenseRupees,
+      profitRupees: v.salesRupees - v.costRupees - v.expenseRupees,
     }));
 
   return series;
@@ -327,6 +368,13 @@ function renderInsights(series, totals, insights) {
   }
   if (insights.profitMarginPct != null && Number.isFinite(insights.profitMarginPct)) {
     items.push(`Net profit margin: ${formatPercent(insights.profitMarginPct)}`);
+  }
+  if (insights.profitGrowthPercent != null && Number.isFinite(insights.profitGrowthPercent)) {
+    const dir = insights.profitGrowthPercent >= 0 ? "up" : "down";
+    items.push(`Profit ${dir} ${formatPercent(Math.abs(insights.profitGrowthPercent))} vs previous period — ${insights.profitGrowthPercent >= 0 ? "keep it up" : "review costs and pricing"}.`);
+  }
+  if (insights.expenseRatioPct != null && totals.salesRupees > 0 && insights.expenseRatioPct > 15) {
+    items.push(`Expense ratio above 15% — consider tracking categories in Expenses to control costs.`);
   }
 
   if (items.length === 0) {
@@ -520,15 +568,16 @@ async function loadAndRender(range) {
   if (label) label.textContent = "Loading…";
   if (salesEl) salesEl.textContent = "…";
 
-  const { dsrData, expenseData } = await fetchAnalysisData(range.start, range.end);
-  const series = buildDailySeries(dsrData, expenseData, range.start, range.end);
+  const { dsrData, expenseData, receiptRows } = await fetchAnalysisData(range.start, range.end);
+  const series = buildDailySeries(dsrData, expenseData, receiptRows, range.start, range.end);
 
   const totals = {
     salesRupees: series.reduce((s, d) => s + d.salesRupees, 0),
+    costRupees: series.reduce((s, d) => s + (d.costRupees ?? 0), 0),
     expenseRupees: series.reduce((s, d) => s + d.expenseRupees, 0),
     profitRupees: 0,
   };
-  totals.profitRupees = totals.salesRupees - totals.expenseRupees;
+  totals.profitRupees = totals.salesRupees - totals.costRupees - totals.expenseRupees;
 
   let growthPercent = null;
   let profitGrowthPercent = null;
@@ -538,6 +587,7 @@ async function loadAndRender(range) {
     const prevSeries = buildDailySeries(
       prevData.dsrData,
       prevData.expenseData,
+      prevData.receiptRows,
       prev.start,
       prev.end
     );
@@ -557,6 +607,18 @@ async function loadAndRender(range) {
   renderCharts(series, totals);
 }
 
+function loadChartJs() {
+  if (typeof window.Chart !== "undefined") return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/chart.js@4.4.1";
+    script.defer = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Failed to load Chart.js"));
+    document.head.appendChild(script);
+  });
+}
+
 async function initAnalysisPage() {
   const rangeSelect = document.getElementById("analysis-range");
   const startInput = document.getElementById("analysis-start");
@@ -565,6 +627,8 @@ async function initAnalysisPage() {
   const customRange = document.getElementById("analysis-custom-range");
 
   if (!rangeSelect || !form || !customRange) return;
+
+  await loadChartJs();
 
   const ANALYSIS_RANGES = new Set(["this-week", "this-month", "last-3-months", "custom"]);
   const stored = typeof window.getValidFilterState === "function"

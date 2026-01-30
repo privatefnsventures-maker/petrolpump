@@ -145,9 +145,25 @@ function initReadingForm(product) {
     updateDerivedFields(form);
   });
 
+  const copyPrevBtn = form.querySelector(".dsr-copy-prev[data-product]");
+  if (copyPrevBtn && copyPrevBtn.dataset.product === product) {
+    copyPrevBtn.addEventListener("click", async () => {
+      copyPrevBtn.disabled = true;
+      copyPrevBtn.textContent = "Loading…";
+      await prefillOpeningFromPreviousDay(product, form);
+      copyPrevBtn.disabled = false;
+      copyPrevBtn.textContent = "Copy from previous day";
+    });
+  }
+
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
 
+    const submitBtn = form.querySelector('button[type="submit"]');
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Saving…";
+    }
     const successEl = document.getElementById(`dsr-success-${product}`);
     const errorEl = document.getElementById(`dsr-error-${product}`);
     successEl?.classList.add("hidden");
@@ -176,7 +192,13 @@ function initReadingForm(product) {
       payload.diesel_rate = toNumber(formData.get("diesel_rate"));
     }
 
+    payload.receipts = toNumber(formData.get("receipts"));
+
     if (!payload.date) {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Save meter entry";
+      }
       if (errorEl) {
         errorEl.textContent = "Date is required.";
         errorEl.classList.remove("hidden");
@@ -186,6 +208,10 @@ function initReadingForm(product) {
 
     const exists = await dsrEntryExistsForDate(product, payload.date);
     if (exists) {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Save meter entry";
+      }
       if (errorEl) {
         errorEl.textContent = MSG_DUPLICATE_DSR_DATE;
         errorEl.classList.remove("hidden");
@@ -196,15 +222,36 @@ function initReadingForm(product) {
     const { error } = await supabaseClient.from("dsr").insert(payload);
 
     if (error) {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Save meter entry";
+      }
       AppError.handle(error, { target: errorEl });
       return;
     }
 
+    const hasReceipts = Number(payload.receipts) > 0;
+    if (hasReceipts && typeof sessionStorage !== "undefined") {
+      sessionStorage.setItem("pl_todo_pending", "1");
+    }
+
     form.reset();
     setDefaultDate(form);
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Save meter entry";
+    }
     prefillOpeningFromPreviousDay(product, form);
     updateDerivedFields(form);
     successEl?.classList.remove("hidden");
+    if (successEl) {
+      if (hasReceipts) {
+        successEl.innerHTML =
+          'Entry saved. Receipts recorded — <a href="dashboard.html#pl">Enter buying price on P&L dashboard</a> to calculate profit from this day until the next receipt.';
+      } else {
+        successEl.textContent = "Entry saved successfully.";
+      }
+    }
     loadReadingHistory(product, true); // Reset pagination to show new entry
   });
 }

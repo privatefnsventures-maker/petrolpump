@@ -3,7 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Dashboard · Petrol Pump</title>
+    <title>Dashboard · Bishnupriya Fuels</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%232563eb'><path d='M19 5v2h-4V5h4m-6 0v2H9V5h4m-6 0v2H5V5h4m15 6v2h-4v-2h4m-6 0v2H9v-2h4m-6 0v2H5v-2h4m15 6v2h-4v-2h4m-6 0v2H9v-2h4m-6 0v2H5v-2h4'/></svg>" type="image/svg+xml" />
     <link rel="stylesheet" href="css/base.css" />
     <link rel="stylesheet" href="css/app.css" />
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3"></script>
@@ -17,65 +18,66 @@
   </head>
   <body>
     <header class="topbar">
-      <h1>Bishnupriya Fuels</h1>
-      <nav>
-        <a href="dashboard.html">Dashboard</a>
-        <a href="dsr.html">Daily Sales Report</a>
-        <a href="credit.html">Credit Ledger</a>
-        <a href="expenses.html">Expenses</a>
-        <a href="attendance.html">Attendance</a>
-        <a href="salary.html">Staff Salary</a>
-        <a href="analysis.html" data-role="admin-only" style="display:none">Analysis</a>
-        <a href="settings.html" data-role="admin-only" style="display:none">Settings</a>
-        <button id="logout-button" class="link">Logout</button>
+      <div class="brand">
+        <a href="dashboard.html">Bishnupriya Fuels</a>
+        <span class="page-subtitle">Dashboard</span>
+      </div>
+      <button type="button" class="nav-toggle" aria-label="Toggle menu" aria-expanded="false"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h18v2H3v-2z"/></svg></button>
+      <nav class="nav-wrap collapsible" aria-label="Main navigation">
+        <div class="nav-group-block">
+          <span class="nav-group-label" tabindex="0" aria-haspopup="true" aria-expanded="false">Operations<span class="nav-chevron" aria-hidden="true"></span></span>
+          <div class="nav-group" role="menu">
+            <a href="dashboard.html">Dashboard</a>
+            <a href="dsr.html">Meter Reading</a>
+            <a href="sales-daily.html">DSR</a>
+          </div>
+        </div>
+        <div class="nav-group-block">
+          <span class="nav-group-label" tabindex="0" aria-haspopup="true" aria-expanded="false">Finance<span class="nav-chevron" aria-hidden="true"></span></span>
+          <div class="nav-group" role="menu">
+            <a href="credit.html">Credit</a>
+            <a href="credit-overdue.html">Overdue</a>
+            <a href="expenses.html">Expenses</a>
+            <a href="day-closing.html">Day closing &amp; short</a>
+          </div>
+        </div>
+        <div class="nav-group-block">
+          <span class="nav-group-label" tabindex="0" aria-haspopup="true" aria-expanded="false">HR<span class="nav-chevron" aria-hidden="true"></span></span>
+          <div class="nav-group" role="menu">
+            <a href="attendance.html">Attendance</a>
+            <a href="salary.html">Salary</a>
+          </div>
+        </div>
+        <div class="nav-group-block">
+          <span class="nav-group-label" tabindex="0" aria-haspopup="true" aria-expanded="false">Admin<span class="nav-chevron" aria-hidden="true"></span></span>
+          <div class="nav-group" role="menu">
+            <a href="analysis.html" data-role="admin-only" style="display:none">Analysis</a>
+            <a href="settings.html" data-role="admin-only" style="display:none">Settings</a>
+          </div>
+        </div>
+        <button id="logout-button" class="link nav-logout">Logout</button>
       </nav>
     </header>
 
-    <main>
-      <section class="card hero-card">
-        <h2>Welcome back</h2>
-        <p id="operator-info" class="muted">Loading operator details…</p>
-      </section>
+    <main class="dashboard-page">
+      <header class="dashboard-welcome-strip no-print" aria-label="Welcome">
+        <span class="dashboard-welcome-text">Welcome back, <span id="operator-name" class="dashboard-operator-name">Loading…</span> <span id="operator-role" class="dashboard-operator-role"></span></span>
+      </header>
 
-      <section class="card">
+      <div class="dashboard-layout">
+        <div class="dashboard-main">
+      <section class="card dashboard-card loading" id="snapshot-card">
         <div class="card-head snapshot-head">
-          <div>
-            <h2>Daily Snapshot</h2>
-            <p class="muted">Select a past date to review totals.</p>
-          </div>
+          <h2 class="dashboard-section-title">Daily Snapshot</h2>
           <div class="snapshot-controls">
-            <div class="form-field">
+            <div class="form-field form-field-inline">
               <label for="snapshot-date">Date</label>
               <input id="snapshot-date" type="date" />
-            </div>
-            <div class="form-field">
-              <label for="snapshot-petrol-rate">Petrol rate (₹/L)</label>
-              <input
-                id="snapshot-petrol-rate"
-                type="number"
-                inputmode="decimal"
-                step="0.01"
-                min="0"
-                placeholder="Optional"
-                readonly
-              />
-            </div>
-            <div class="form-field">
-              <label for="snapshot-diesel-rate">Diesel rate (₹/L)</label>
-              <input
-                id="snapshot-diesel-rate"
-                type="number"
-                inputmode="decimal"
-                step="0.01"
-                min="0"
-                placeholder="Optional"
-                readonly
-              />
             </div>
           </div>
         </div>
 
-        <div class="grid">
+        <div class="dashboard-snapshot-grid grid">
           <a id="sales-daily-link" class="card-link" href="sales-daily.html">
             <article class="card highlight-card clickable-card">
               <h3>Total Sale</h3>
@@ -94,46 +96,41 @@
           </a>
           <a class="card-link" href="credit-overdue.html">
             <article class="card highlight-card clickable-card">
-              <h3>Open Credit</h3>
+              <h3>Open credit (outstanding)</h3>
               <p class="stat" id="credit-total">&#8212;</p>
-              <small class="muted">Total due across customers</small>
+              <small class="muted">Total due across customers as of selected date</small>
             </article>
           </a>
         </div>
       </section>
 
-      <section class="card">
-        <div class="card-head">
-          <div>
-            <h2>DSR Dashboard</h2>
-            <p id="dsr-date-label" class="muted">Loading DSR summary…</p>
-          </div>
-        </div>
-
-        <form id="dsr-filter-form" class="dsr-filter" autocomplete="off">
-          <div class="form-field">
-            <label for="dsr-range">Range</label>
-            <select id="dsr-range">
-              <option value="today" selected>Today</option>
-              <option value="this-week">This week</option>
-              <option value="this-month">This month</option>
-              <option value="custom">Custom dates</option>
-            </select>
-          </div>
-          <div id="dsr-custom-range" class="custom-range hidden">
-            <div class="form-field">
-              <label for="dsr-start">From</label>
-              <input id="dsr-start" type="date" />
+      <section class="card dashboard-card loading" id="dsr-dashboard-card">
+        <div class="card-head dsr-card-head-inline">
+          <h2 class="dashboard-section-title">DSR Summary</h2>
+          <form id="dsr-filter-form" class="dsr-filter-inline" autocomplete="off">
+            <div class="form-field form-field-inline">
+              <label for="dsr-range">Range</label>
+              <select id="dsr-range">
+                <option value="today" selected>Today</option>
+                <option value="this-week">This week</option>
+                <option value="this-month">This month</option>
+                <option value="custom">Custom dates</option>
+              </select>
             </div>
-            <div class="form-field">
-              <label for="dsr-end">To</label>
-              <input id="dsr-end" type="date" />
+            <div id="dsr-custom-range" class="custom-range hidden">
+              <div class="form-field form-field-inline">
+                <label for="dsr-start">From</label>
+                <input id="dsr-start" type="date" />
+              </div>
+              <div class="form-field form-field-inline">
+                <label for="dsr-end">To</label>
+                <input id="dsr-end" type="date" />
+              </div>
             </div>
-          </div>
-          <div class="filter-actions">
             <button type="submit" id="dsr-apply">Apply</button>
-          </div>
-        </form>
+          </form>
+        </div>
+        <p id="dsr-date-label" class="dashboard-muted-caption">Loading…</p>
 
         <div class="fuel-grid">
           <article class="card fuel-card">
@@ -178,52 +175,66 @@
               </article>
             </div>
           </article>
-          <article class="card fuel-card">
-            <h3>Expenses</h3>
-            <div class="stat-grid">
-              <article class="stat-tile">
-                <h4>Total (₹)</h4>
-                <p class="stat" id="dsr-expense">&#8212;</p>
-                <small class="muted">Logged expenses in range</small>
-              </article>
-            </div>
-          </article>
         </div>
+
+        <article class="card dsr-summary-card dsr-summary-compact">
+          <h3 class="dashboard-subtitle">Day summary</h3>
+          <dl class="dsr-summary-list">
+            <div class="dsr-summary-row">
+              <dt>Total net sale (₹)</dt>
+              <dd id="dsr-total-net-sale">—</dd>
+            </div>
+            <div class="dsr-summary-row">
+              <dt>Expenses (₹)</dt>
+              <dd id="dsr-summary-expense">—</dd>
+            </div>
+            <div class="dsr-summary-row">
+              <dt>New credit in period (₹)</dt>
+              <dd id="dsr-summary-credit">—</dd>
+            </div>
+            <div class="dsr-summary-row dsr-summary-inhand">
+              <dt>Net cash (₹)</dt>
+              <dd id="dsr-in-hand">—</dd>
+            </div>
+          </dl>
+        </article>
       </section>
 
-      <section class="card" data-role="admin-only">
-        <div class="card-head">
-          <div>
-            <h2>Profit &amp; Loss</h2>
-            <p class="muted">Admin-only summary for the selected range.</p>
-            <p id="pl-date-label" class="muted">Loading range…</p>
-          </div>
-        </div>
-
-        <form id="pl-filter-form" class="dsr-filter" autocomplete="off">
-          <div class="form-field">
-            <label for="pl-range">Range</label>
-            <select id="pl-range">
-              <option value="today" selected>Today</option>
-              <option value="this-week">This week</option>
-              <option value="this-month">This month</option>
-              <option value="custom">Custom dates</option>
-            </select>
-          </div>
-          <div id="pl-custom-range" class="custom-range hidden">
-            <div class="form-field">
-              <label for="pl-start">From</label>
-              <input id="pl-start" type="date" />
+      <section id="pl" class="card dashboard-card" data-role="admin-only">
+        <div class="card-head dsr-card-head-inline">
+          <h2 class="dashboard-section-title">Profit &amp; Loss</h2>
+          <form id="pl-filter-form" class="dsr-filter-inline" autocomplete="off">
+            <div class="form-field form-field-inline">
+              <label for="pl-range">Range</label>
+              <select id="pl-range">
+                <option value="today" selected>Today</option>
+                <option value="this-week">This week</option>
+                <option value="this-month">This month</option>
+                <option value="custom">Custom dates</option>
+              </select>
             </div>
-            <div class="form-field">
-              <label for="pl-end">To</label>
-              <input id="pl-end" type="date" />
+            <div id="pl-custom-range" class="custom-range hidden">
+              <div class="form-field form-field-inline">
+                <label for="pl-start">From</label>
+                <input id="pl-start" type="date" />
+              </div>
+              <div class="form-field form-field-inline">
+                <label for="pl-end">To</label>
+                <input id="pl-end" type="date" />
+              </div>
             </div>
-          </div>
-          <div class="filter-actions">
             <button type="submit" id="pl-apply">Apply</button>
-          </div>
-        </form>
+          </form>
+        </div>
+        <p id="pl-date-label" class="dashboard-muted-caption">Loading range…</p>
+
+        <p id="pl-buying-price-error" class="error hidden" role="alert"></p>
+        <div id="pl-buying-price-alert" class="pl-buying-price-alert hidden">
+          <p class="pl-alert-message">
+            Receipt days require a buying price (₹/L) to calculate profit. Enter below; profit is computed from each receipt day until the next.
+          </p>
+          <ul id="pl-missing-buying-list" class="pl-missing-buying-list"></ul>
+        </div>
 
         <div class="stat-grid">
           <article class="stat-tile">
@@ -235,8 +246,9 @@
             <p class="stat" id="pl-expense">&#8212;</p>
           </article>
           <article class="stat-tile">
-            <h3 id="pl-label">Profit</h3>
+            <h3 id="pl-label">Profit / Loss</h3>
             <p class="stat" id="pl-value">&#8212;</p>
+            <p id="pl-profit-hint" class="pl-profit-hint muted hidden"></p>
           </article>
         </div>
 
@@ -252,14 +264,64 @@
         </div>
       </section>
 
-      <section class="card">
-        <h3>Recent Activity</h3>
-        <ul id="recent-log" class="activity"></ul>
-      </section>
+        </div>
+
+        <aside class="dashboard-sidebar no-print" aria-label="Notifications and quick stats">
+          <h2 class="dashboard-sidebar-title">Notifications</h2>
+          <div class="dashboard-sidebar-inner">
+            <div class="notification-block notification-today-price">
+              <h3 class="notification-block-title">Today&apos;s price</h3>
+              <div class="notification-rate-fields">
+                <div class="form-field">
+                  <label for="snapshot-petrol-rate">Petrol (₹/L)</label>
+                  <input id="snapshot-petrol-rate" type="number" inputmode="decimal" step="0.01" min="0" placeholder="—" readonly aria-label="Petrol rate" />
+                </div>
+                <div class="form-field">
+                  <label for="snapshot-diesel-rate">Diesel (₹/L)</label>
+                  <input id="snapshot-diesel-rate" type="number" inputmode="decimal" step="0.01" min="0" placeholder="—" readonly aria-label="Diesel rate" />
+                </div>
+              </div>
+            </div>
+            <div class="dashboard-status-bar no-print hidden" id="dashboard-status-bar">
+              <div id="at-a-glance" class="at-a-glance at-a-glance-sidebar hidden">
+                <div class="at-a-glance-item">
+                  <span class="label">Today's sale</span>
+                  <span class="value" id="glance-sale">—</span>
+                </div>
+                <div class="at-a-glance-item">
+                  <span class="label">Open credit</span>
+                  <span class="value" id="glance-credit">—</span>
+                </div>
+                <div class="at-a-glance-item">
+                  <span class="label">Net cash</span>
+                  <span class="value" id="glance-cash">—</span>
+                </div>
+              </div>
+            </div>
+            <div id="day-closing-block" class="day-closing-block hidden" aria-live="polite">
+              <div id="day-closing-banners"></div>
+            </div>
+            <div class="dashboard-alerts dashboard-alerts-empty no-print" id="dashboard-alerts">
+              <div id="low-stock-alert" class="low-stock-alert hidden" role="alert">
+                <p class="low-stock-message" id="low-stock-message"></p>
+                <a href="dsr.html" id="low-stock-cta" class="low-stock-cta button-secondary">View Meter Reading</a>
+              </div>
+              <div id="smart-alerts-panel" class="smart-alerts-panel hidden" role="region" aria-label="Alerts and reminders"></div>
+            </div>
+            <div id="pl-todo-banner" class="pl-todo-banner hidden" data-role="admin-only" aria-live="polite">
+              <p class="pl-todo-message">
+                <strong id="pl-todo-text">You have <span id="pl-todo-count">0</span> receipt day(s) without buying price.</strong>
+                Enter in P&L below to calculate profit from each receipt day until the next receipt day.
+              </p>
+              <a href="#pl" id="pl-todo-goto" class="button-secondary pl-todo-goto">Go to P&L</a>
+            </div>
+          </div>
+        </aside>
+      </div>
     </main>
 
     <footer>
-      <small>Need help? Contact your administrator.</small>
+      <small>Support: <a href="mailto:official@fnsventures.in">official@fnsventures.in</a> · <a href="https://wa.me/919668913299">WhatsApp +91 96689 13299</a></small>
     </footer>
   </body>
 </html>
