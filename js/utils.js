@@ -49,6 +49,21 @@ function setFilterState(key, state) {
 }
 
 /**
+ * Get today's date as YYYY-MM-DD in the user's local timezone.
+ * Use this for "today" in credit payments and day closing so the same calendar day is used.
+ * @returns {string}
+ */
+function getLocalDateString() {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+window.getLocalDateString = getLocalDateString;
+
+/**
  * Format a value as INR currency (₹) with 2 decimal places.
  * Returns "—" for null, undefined, or NaN.
  * @param {number|null|undefined} value
@@ -63,7 +78,32 @@ function formatCurrency(value) {
   });
 }
 
+/**
+ * Show global top progress bar during API calls.
+ * Call hideProgress() when done (e.g. in finally).
+ */
+function showProgress() {
+  let bar = document.getElementById("top-progress-bar");
+  if (!bar) {
+    bar = document.createElement("div");
+    bar.id = "top-progress-bar";
+    bar.setAttribute("aria-hidden", "true");
+    document.body.appendChild(bar);
+  }
+  bar.classList.add("loading");
+}
+
+/**
+ * Hide global top progress bar.
+ */
+function hideProgress() {
+  const bar = document.getElementById("top-progress-bar");
+  if (bar) bar.classList.remove("loading");
+}
+
 window.formatCurrency = formatCurrency;
 window.getFilterState = getFilterState;
 window.getValidFilterState = getValidFilterState;
 window.setFilterState = setFilterState;
+window.showProgress = showProgress;
+window.hideProgress = hideProgress;

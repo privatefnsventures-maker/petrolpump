@@ -134,6 +134,9 @@ async function loadOpenCredit(dateStr, reset = false) {
       if (reset) {
         tbody.innerHTML = `<tr><td colspan="5" class="error">${escapeHtml(AppError.getUserMessage(error))}</td></tr>`;
         if (summary) summary.textContent = "Unable to load.";
+        if (document.getElementById("credit-overdue-as-of")) {
+          document.getElementById("credit-overdue-as-of").textContent = `As of ${formatDisplayDate(dateStr)}`;
+        }
       }
       AppError.report(error, { context: "loadOpenCredit" });
       overduePagination.isLoading = false;
@@ -148,8 +151,11 @@ async function loadOpenCredit(dateStr, reset = false) {
 
     // Handle empty data on initial load
     if (reset && !fetchedCount) {
-      tbody.innerHTML = "<tr><td colspan='5' class='muted'>No outstanding credits.</td></tr>";
-      if (summary) summary.textContent = `No pending credits on ${dateStr}.`;
+      tbody.innerHTML = `<tr><td colspan='5'><div class='empty-state'><p>No outstanding credits for this date.</p><p class='empty-cta'><a href='credit.html'>Record credit sale</a></p></div></td></tr>`;
+      if (summary) summary.textContent = "Total outstanding: ₹0.00 · 0 customers";
+      if (document.getElementById("credit-overdue-as-of")) {
+        document.getElementById("credit-overdue-as-of").textContent = `As of ${formatDisplayDate(dateStr)}`;
+      }
       overduePagination.isLoading = false;
       updateOverduePaginationUI();
       return;
@@ -170,8 +176,11 @@ async function loadOpenCredit(dateStr, reset = false) {
 
     // Handle no filtered results
     if (overduePagination.filteredData.length === 0 && !overduePagination.hasMore) {
-      tbody.innerHTML = "<tr><td colspan='5' class='muted'>No outstanding credits.</td></tr>";
-      if (summary) summary.textContent = `No pending credits on ${dateStr}.`;
+      tbody.innerHTML = `<tr><td colspan='5'><div class='empty-state'><p>No outstanding credits for this date.</p><p class='empty-cta'><a href='credit.html'>Record credit sale</a></p></div></td></tr>`;
+      if (summary) summary.textContent = "Total outstanding: ₹0.00 · 0 customers";
+      if (document.getElementById("credit-overdue-as-of")) {
+        document.getElementById("credit-overdue-as-of").textContent = `As of ${formatDisplayDate(dateStr)}`;
+      }
       overduePagination.isLoading = false;
       updateOverduePaginationUI();
       return;
@@ -181,8 +190,12 @@ async function loadOpenCredit(dateStr, reset = false) {
     const totalDue = overduePagination.filteredData.reduce(
       (sum, row) => sum + Number(row.amount_due ?? 0), 0
     );
+    const asOfEl = document.getElementById("credit-overdue-as-of");
     if (summary) {
-      summary.textContent = `${overduePagination.filteredData.length} customers · ${formatCurrency(totalDue)} outstanding`;
+      summary.textContent = `Total outstanding: ${formatCurrency(totalDue)} · ${overduePagination.filteredData.length} customers`;
+    }
+    if (asOfEl) {
+      asOfEl.textContent = `As of ${formatDisplayDate(dateStr)}`;
     }
 
     // Render table
@@ -259,6 +272,17 @@ function updateOverduePaginationUI() {
 function formatDate(value) {
   if (!value) return "—";
   const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function formatDisplayDate(dateStr) {
+  if (!dateStr) return "—";
+  const date = new Date(dateStr + "T00:00:00");
   if (Number.isNaN(date.getTime())) return "—";
   return date.toLocaleDateString("en-IN", {
     day: "numeric",
