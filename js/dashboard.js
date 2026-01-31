@@ -1295,6 +1295,11 @@ async function handleSaveBuyingPrice(dsrId) {
     btn.textContent = "Saved";
     btn.classList.add("pl-save-success");
   }
+  // Invalidate cache so other tabs / next load see updated P&L immediately
+  if (typeof AppCache !== "undefined" && AppCache) {
+    AppCache.invalidateByType("profit_loss");
+    AppCache.invalidateByType("dashboard_data");
+  }
   const range = getCurrentPlRange();
   if (range) await loadProfitLossSummary(range);
   loadPlTodoBanner();

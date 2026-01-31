@@ -1,4 +1,4 @@
-/* global requireAuth, applyRoleVisibility, supabaseClient, formatCurrency, AppError */
+/* global requireAuth, applyRoleVisibility, supabaseClient, formatCurrency, AppCache, AppError */
 
 function escapeHtml(str) {
   return String(str ?? "")
@@ -318,6 +318,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       fillStaffSelect(paymentStaffSelect);
       paymentSuccess?.classList.remove("hidden");
       await refreshAll();
+      // Invalidate cache so dashboard reflects new expense (salary) immediately
+      if (typeof AppCache !== "undefined" && AppCache) {
+        AppCache.invalidateByType("dashboard_data");
+        AppCache.invalidateByType("recent_activity");
+      }
     });
   }
 
@@ -374,6 +379,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       staffMemberForm.reset();
       document.getElementById("staff-member-id").value = "";
+      // Invalidate cache so other pages see updated staff list immediately
+      if (typeof AppCache !== "undefined" && AppCache) {
+        AppCache.invalidateByType("staff_list");
+      }
       if (staffSubmitBtn) {
         staffSubmitBtn.disabled = false;
         staffSubmitBtn.textContent = "Add staff";
