@@ -1,4 +1,4 @@
-/* global requireAuth, applyRoleVisibility, supabaseClient, getLocalDateString, AppError */
+/* global requireAuth, applyRoleVisibility, supabaseClient, getLocalDateString, AppCache, AppError */
 
 function escapeHtml(str) {
   return String(str ?? "")
@@ -225,6 +225,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       return;
     }
     showMessage("Saved.");
+    if (typeof AppCache !== "undefined" && AppCache) {
+      AppCache.invalidateByType("recent_activity");
+    }
     loadAttendanceForDate(date).then(() => renderAttendanceTable(date));
   }
 
@@ -276,6 +279,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       return;
     }
     showMessage(saved ? `Saved ${saved} record(s).` : "No changes to save.");
+    if (typeof AppCache !== "undefined" && AppCache) {
+      AppCache.invalidateByType("recent_activity");
+    }
     loadAttendanceForDate(date).then(() => renderAttendanceTable(date));
   }
 
