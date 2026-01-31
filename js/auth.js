@@ -100,6 +100,20 @@ function invalidateUserRoleCache(email) {
   }
 }
 
+document.addEventListener("DOMContentLoaded", async () => {
+  const path = window.location.pathname || "";
+  if (path.includes("login")) {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (session) {
+      const role = await resolveRoleForSession(session);
+      window.location.href = resolveLanding(role);
+      return;
+    }
+  }
+  markCurrentNavLink();
+  initNavToggle();
+});
+
 if (loginForm) {
   loginForm.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -127,6 +141,39 @@ if (loginForm) {
   });
 }
 
+const forgotPasswordLink = document.getElementById("forgot-password-link");
+if (forgotPasswordLink) {
+  forgotPasswordLink.addEventListener("click", async (e) => {
+    e.preventDefault();
+    const emailInput = document.getElementById("email");
+    const email = emailInput?.value?.trim();
+    if (!email) {
+      if (loginError) {
+        loginError.textContent = "Enter your email above, then click Forgot password.";
+        loginError.classList.remove("hidden");
+      }
+      return;
+    }
+    forgotPasswordLink.textContent = "Sending…";
+    const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + "/login.html",
+    });
+    if (loginError) loginError.classList.add("hidden");
+    if (error) {
+      if (loginError) {
+        loginError.textContent = error.message || "Failed to send reset email.";
+        loginError.classList.remove("hidden");
+      }
+      forgotPasswordLink.textContent = "Forgot password?";
+      return;
+    }
+    forgotPasswordLink.textContent = "Check your email for reset link.";
+    setTimeout(() => {
+      forgotPasswordLink.textContent = "Forgot password?";
+    }, 5000);
+  });
+}
+
 if (logoutButton) {
   logoutButton.addEventListener("click", async () => {
     // Get current session before signing out to clear cache
@@ -148,9 +195,34 @@ if (logoutButton) {
   });
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-  markCurrentNavLink();
-});
+
+function initNavToggle() {
+  const toggle = document.querySelector(".topbar .nav-toggle");
+  const nav = document.querySelector(".topbar .nav-wrap.collapsible");
+  if (!toggle || !nav) return;
+  toggle.addEventListener("click", () => {
+    const open = nav.classList.toggle("is-open");
+    toggle.setAttribute("aria-expanded", String(open));
+  });
+
+  /* Mobile: tap group label to expand/collapse that group (accordion) */
+  nav.querySelectorAll(".nav-group-label").forEach((label) => {
+    label.addEventListener("click", (e) => {
+      const block = label.closest(".nav-group-block");
+      if (!block) return;
+      const isOpen = block.classList.toggle("is-open");
+      label.setAttribute("aria-expanded", String(isOpen));
+    });
+    label.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      e.preventDefault();
+      const block = label.closest(".nav-group-block");
+      if (!block) return;
+      const isOpen = block.classList.toggle("is-open");
+      label.setAttribute("aria-expanded", String(isOpen));
+    });
+  });
+}
 
 /**
  * Verifies page access via server-side database function.
