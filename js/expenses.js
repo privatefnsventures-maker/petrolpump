@@ -1,6 +1,13 @@
 /* global supabaseClient, requireAuth, applyRoleVisibility, formatCurrency, AppError */
 
-// Simple HTML escape for XSS prevention
+// Category labels: loaded from expense_categories; legacy fallbacks for old DB values
+let CATEGORY_LABEL_MAP = {};
+const LEGACY_CATEGORY_LABELS = {
+  miscellanious: "Miscellaneous",
+  mstest: "Miscellaneous",
+  hsdtest: "Others",
+};
+
 function escapeHtml(str) {
   return String(str)
     .replace(/&/g, "&amp;")
@@ -8,6 +15,10 @@ function escapeHtml(str) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+function getCategoryLabel(value) {
+  return CATEGORY_LABEL_MAP[value] || LEGACY_CATEGORY_LABELS[value] || value || "—";
 }
 
 // Pagination state
@@ -27,6 +38,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (!auth) return;
   applyRoleVisibility(auth.role);
 
+  await loadAndFillCategorySelect();
+
   const form = document.getElementById("expense-form");
   const successEl = document.getElementById("expense-success");
   const errorEl = document.getElementById("expense-error");
@@ -39,6 +52,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (form) {
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
+      const submitBtn = form.querySelector('button[type="submit"]');
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Saving…";
+      }
       successEl?.classList.add("hidden");
       errorEl?.classList.add("hidden");
 
@@ -50,7 +68,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         amount: Number(formData.get("amount") || 0),
       };
 
-      // Add created_by for RLS policy compliance
       if (auth.session?.user?.id) {
         payload.created_by = auth.session.user.id;
       }
@@ -60,10 +77,19 @@ document.addEventListener("DOMContentLoaded", async () => {
           errorEl.textContent = "Date is required.";
           errorEl.classList.remove("hidden");
         }
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Save expense";
+        }
         return;
       }
 
       const { error } = await supabaseClient.from("expenses").insert(payload);
+
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Save expense";
+      }
 
       if (error) {
         AppError.handle(error, { target: errorEl });
@@ -75,14 +101,90 @@ document.addEventListener("DOMContentLoaded", async () => {
         dateInput.value = new Date().toISOString().slice(0, 10);
       }
       successEl?.classList.remove("hidden");
-      loadExpenses(true); // Reset pagination to show new entry
+      loadExpenses(true);
     });
   }
 
-  // Initialize pagination controls
+  initExpenseFilter();
   initExpensesPaginationControls();
   loadExpenses(true);
 });
+
+async function loadAndFillCategorySelect() {
+  const select = document.getElementById("expense-category");
+  if (!select) return;
+
+  const { data, error } = await supabaseClient
+    .from("expense_categories")
+    .select("name, label")
+    .order("sort_order", { ascending: true })
+    .order("label", { ascending: true });
+
+  CATEGORY_LABEL_MAP = {};
+  const categories = [];
+  if (!error && data?.length) {
+    data.forEach((row) => {
+      CATEGORY_LABEL_MAP[row.name] = row.label;
+      categories.push({ value: row.name, label: row.label });
+    });
+  }
+  Object.assign(CATEGORY_LABEL_MAP, LEGACY_CATEGORY_LABELS);
+
+  select.innerHTML = "";
+  const optPlaceholder = document.createElement("option");
+  optPlaceholder.value = "";
+  optPlaceholder.textContent = "Select category";
+  select.appendChild(optPlaceholder);
+  categories.forEach((c) => {
+    const opt = document.createElement("option");
+    opt.value = c.value;
+    opt.textContent = c.label;
+    select.appendChild(opt);
+  });
+}
+
+function getExpenseDateRange() {
+  const rangeSelect = document.getElementById("expense-range");
+  const startInput = document.getElementById("expense-start");
+  const endInput = document.getElementById("expense-end");
+  const val = rangeSelect?.value || "this-month";
+  const now = new Date();
+  if (val === "this-week") {
+    const diffToMonday = (now.getDay() + 6) % 7;
+    const start = new Date(now);
+    start.setDate(now.getDate() - diffToMonday);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) };
+  }
+  if (val === "custom" && startInput?.value && endInput?.value) {
+    const s = startInput.value;
+    const e = endInput.value;
+    return { start: s < e ? s : e, end: s < e ? e : s };
+  }
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const start = new Date(y, m, 1);
+  const end = new Date(y, m + 1, 0);
+  return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) };
+}
+
+function initExpenseFilter() {
+  const rangeSelect = document.getElementById("expense-range");
+  const customRange = document.getElementById("expense-custom-range");
+  const applyBtn = document.getElementById("expense-apply-filter");
+  if (customRange && rangeSelect) {
+    customRange.classList.toggle("hidden", rangeSelect.value !== "custom");
+  }
+  if (rangeSelect) {
+    rangeSelect.addEventListener("change", () => {
+      if (customRange) customRange.classList.toggle("hidden", rangeSelect.value !== "custom");
+    });
+  }
+  if (applyBtn) {
+    applyBtn.addEventListener("click", () => loadExpenses(true));
+  }
+}
 
 /**
  * Initialize pagination controls for expenses table
@@ -113,50 +215,52 @@ function initExpensesPaginationControls() {
 }
 
 /**
- * Load expenses with pagination support
- * @param {boolean} reset - If true, resets pagination and clears existing data
+ * Load expenses with pagination and optional date filter
+ * @param {boolean} reset - If true, resets pagination and reloads for current filter
  */
 async function loadExpenses(reset = false) {
   const tbody = document.getElementById("expense-table-body");
   const loadMoreBtn = document.getElementById("expenses-load-more");
   const paginationInfo = document.getElementById("expenses-pagination-info");
-  
+  const totalRow = document.getElementById("expense-total-row");
+  const totalValue = document.getElementById("expense-total-value");
+  const emptyCta = document.getElementById("expense-empty-cta");
+  const tableEl = tbody?.closest("table");
+
   if (!tbody) return;
-  
-  // Prevent duplicate requests
   if (expensesPagination.isLoading) return;
   expensesPagination.isLoading = true;
 
-  // Reset pagination state if needed
+  const { start, end } = getExpenseDateRange();
+
   if (reset) {
     expensesPagination.offset = 0;
     expensesPagination.hasMore = true;
     expensesPagination.totalCount = 0;
     tbody.innerHTML = "<tr><td colspan='4' class='muted'>Loading…</td></tr>";
   }
-
-  // Update button state
+  if (totalRow) totalRow.classList.add("hidden");
+  if (emptyCta) emptyCta.classList.add("hidden");
   if (loadMoreBtn) {
     loadMoreBtn.disabled = true;
     loadMoreBtn.textContent = "Loading…";
   }
 
   try {
-    // Fetch total count (only on reset/initial load)
     if (reset) {
       const { count, error: countError } = await supabaseClient
         .from("expenses")
-        .select("*", { count: "exact", head: true });
-      
-      if (!countError) {
-        expensesPagination.totalCount = count || 0;
-      }
+        .select("*", { count: "exact", head: true })
+        .gte("date", start)
+        .lte("date", end);
+      if (!countError) expensesPagination.totalCount = count || 0;
     }
 
-    // Fetch data with pagination using range
     const { data, error } = await supabaseClient
       .from("expenses")
       .select("date, category, description, amount")
+      .gte("date", start)
+      .lte("date", end)
       .order("date", { ascending: false })
       .range(expensesPagination.offset, expensesPagination.offset + PAGE_SIZE - 1);
 
@@ -170,35 +274,51 @@ async function loadExpenses(reset = false) {
       return;
     }
 
-    // Update pagination state
     const fetchedCount = data?.length || 0;
     expensesPagination.offset += fetchedCount;
     expensesPagination.hasMore = fetchedCount === PAGE_SIZE;
 
-    // Handle empty data
     if (reset && !fetchedCount) {
-      tbody.innerHTML = "<tr><td colspan='4' class='muted'>No expenses yet.</td></tr>";
+      tbody.innerHTML = "";
+      if (tableEl) tableEl.classList.add("hidden");
+      if (emptyCta) {
+        emptyCta.classList.remove("hidden");
+        emptyCta.querySelector("p") && (emptyCta.querySelector("p").textContent = "No expenses recorded for this period.");
+      }
+      if (totalRow) totalRow.classList.add("hidden");
       expensesPagination.isLoading = false;
       updateExpensesPaginationUI();
       return;
     }
 
-    // Clear loading message on initial load
     if (reset) {
       tbody.innerHTML = "";
+      if (tableEl) tableEl.classList.remove("hidden");
     }
 
-    // Append rows
+    let periodTotal = 0;
     data.forEach((row) => {
+      periodTotal += Number(row.amount ?? 0);
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td>${row.date}</td>
-        <td>${escapeHtml(row.category ?? "—")}</td>
+        <td>${escapeHtml(getCategoryLabel(row.category))}</td>
         <td>${escapeHtml(row.description ?? "—")}</td>
         <td>${formatCurrency(row.amount)}</td>
       `;
       tbody.appendChild(tr);
     });
+
+    if (reset && totalRow && totalValue) {
+      const { data: sumData } = await supabaseClient
+        .from("expenses")
+        .select("amount")
+        .gte("date", start)
+        .lte("date", end);
+      const total = (sumData || []).reduce((s, r) => s + Number(r.amount ?? 0), 0);
+      totalValue.textContent = formatCurrency(total);
+      totalRow.classList.remove("hidden");
+    }
 
   } catch (err) {
     if (reset) {

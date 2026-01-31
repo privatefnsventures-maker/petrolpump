@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Credit · Bishnupriya Fuels</title>
+    <title>Day closing &amp; short · Bishnupriya Fuels</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%232563eb'><path d='M19 5v2h-4V5h4m-6 0v2H9V5h4m-6 0v2H5V5h4m15 6v2h-4v-2h4m-6 0v2H9v-2h4m-6 0v2H5v-2h4m15 6v2h-4v-2h4m-6 0v2H9v-2h4m-6 0v2H5v-2h4'/></svg>" type="image/svg+xml" />
     <link rel="stylesheet" href="css/base.css" />
     <link rel="stylesheet" href="css/app.css" />
@@ -14,13 +14,13 @@
     <script defer src="js/utils.js"></script>
     <script defer src="js/supabase.js"></script>
     <script defer src="js/auth.js?v=2"></script>
-    <script defer src="js/credit.js"></script>
+    <script defer src="js/day-closing.js"></script>
   </head>
   <body>
     <header class="topbar">
       <div class="brand">
         <a href="dashboard.html">Bishnupriya Fuels</a>
-        <span class="page-subtitle">Credit Ledger</span>
+        <span class="page-subtitle">Day closing &amp; short</span>
       </div>
       <button type="button" class="nav-toggle" aria-label="Toggle menu" aria-expanded="false"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h18v2H3v-2z"/></svg></button>
       <nav class="nav-wrap collapsible" aria-label="Main navigation">
@@ -60,96 +60,63 @@
     </header>
 
     <main class="stack">
-      <section class="card">
-        <h2>Record credit sale</h2>
-        <p class="muted">Add a new credit entry. Use the table below to settle or view outstanding balances.</p>
-        <form id="credit-form" class="form">
-          <div class="form-grid">
-            <div class="form-field">
-              <label for="customer">Customer name</label>
-              <input
-                id="customer"
-                name="customer_name"
-                type="text"
-                placeholder="Fleet owner"
-                maxlength="120"
-                required
-              />
-            </div>
-
-            <div class="form-field">
-              <label for="vehicle">Vehicle no.</label>
-              <input
-                id="vehicle"
-                name="vehicle_no"
-                type="text"
-                placeholder="WB12AB3456"
-                maxlength="32"
-              />
-            </div>
-
-            <div class="form-field">
-              <label for="amount">Amount due (₹)</label>
-              <input
-                id="amount"
-                name="amount_due"
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder="0"
-                required
-              />
-            </div>
-
-            <div class="form-field">
-              <label for="last-payment-date">Last payment date</label>
-              <input
-                id="last-payment-date"
-                name="last_payment"
-                type="date"
-              />
-            </div>
-
-            <div class="form-field">
-              <label for="notes">Notes</label>
-              <textarea
-                id="notes"
-                name="notes"
-                rows="2"
-                placeholder="Fuel type, credit terms, etc."
-              ></textarea>
-            </div>
+      <section class="card dashboard-card day-closing-card">
+        <h2 class="dashboard-section-title">Day closing &amp; short</h2>
+        <p class="muted">(Total sale + Collection + Short previous) − (Night cash + Phone pay + Credit + Expenses) = Today's short</p>
+        <form id="day-closing-form" class="form day-closing-form" autocomplete="off">
+          <div class="form-field">
+            <label for="day-closing-date">Date</label>
+            <input id="day-closing-date" name="date" type="date" required />
           </div>
-
-          <button type="submit">Save credit entry</button>
-          <p id="credit-success" class="success hidden">Credit entry saved.</p>
-          <p id="credit-error" class="error hidden"></p>
+          <div class="day-closing-breakdown">
+            <dl class="dsr-summary-list">
+              <div class="dsr-summary-row">
+                <dt>Total sale (₹)</dt>
+                <dd id="dc-total-sale">—</dd>
+              </div>
+              <div class="dsr-summary-row">
+                <dt>Collection (₹)</dt>
+                <dd id="dc-collection">—</dd>
+              </div>
+              <div class="dsr-summary-row">
+                <dt>Short previous (₹)</dt>
+                <dd id="dc-short-previous">—</dd>
+              </div>
+              <div class="dsr-summary-row dc-subtotal">
+                <dt>Subtotal (₹)</dt>
+                <dd id="dc-subtotal">—</dd>
+              </div>
+              <div class="dsr-summary-row">
+                <dt>Night cash (₹)</dt>
+                <dd><input id="dc-night-cash" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0" aria-label="Hard cash" /></dd>
+              </div>
+              <div class="dsr-summary-row">
+                <dt>Phone pay (₹)</dt>
+                <dd><input id="dc-phone-pay" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0" aria-label="PhonePe/UPI" /></dd>
+              </div>
+              <div class="dsr-summary-row">
+                <dt>Credit today (₹)</dt>
+                <dd id="dc-credit-today">—</dd>
+              </div>
+              <div class="dsr-summary-row">
+                <dt>Expenses today (₹)</dt>
+                <dd id="dc-expenses-today">—</dd>
+              </div>
+              <div class="dsr-summary-row dsr-summary-inhand">
+                <dt>Today's short (₹)</dt>
+                <dd id="dc-short-today">—</dd>
+              </div>
+            </dl>
+          </div>
+          <div class="form-actions">
+            <button type="button" id="day-closing-refresh">Refresh</button>
+            <button type="submit" id="day-closing-save">Save day closing</button>
+          </div>
+          <p id="day-closing-already-saved" class="muted hidden">Day closing already saved for this date.</p>
+          <p id="day-closing-success" class="success hidden">Day closing saved. Short computed and stored for next day.</p>
+          <p id="day-closing-error" class="error hidden" role="alert"></p>
         </form>
       </section>
-
-      <section class="card">
-        <h2>Outstanding balances</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Customer</th>
-              <th>Vehicle</th>
-              <th>Amount due (₹)</th>
-              <th>Last payment</th>
-              <th>Notes</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody id="credit-table-body">
-            <tr>
-              <td colspan="6" class="muted">Loading…</td>
-            </tr>
-          </tbody>
-        </table>
-      </section>
     </main>
-    <footer>
-      <small>Support: <a href="mailto:official@fnsventures.in">official@fnsventures.in</a> · <a href="https://wa.me/919668913299">WhatsApp +91 96689 13299</a></small>
-    </footer>
   </body>
 </html>
