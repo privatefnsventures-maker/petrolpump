@@ -1,4 +1,4 @@
-/* global supabaseClient, requireAuth, applyRoleVisibility, AppError */
+/* global supabaseClient, requireAuth, applyRoleVisibility, AppCache, AppError */
 
 // Simple HTML escape for XSS prevention
 function escapeHtml(str) {
@@ -253,6 +253,13 @@ function initReadingForm(product) {
       }
     }
     loadReadingHistory(product, true); // Reset pagination to show new entry
+    // Invalidate cache so dashboard reflects new DSR immediately
+    if (typeof AppCache !== "undefined" && AppCache) {
+      AppCache.invalidateByType("dashboard_data");
+      AppCache.invalidateByType("today_sales");
+      AppCache.invalidateByType("dsr_summary");
+      AppCache.invalidateByType("profit_loss");
+    }
   });
 }
 
@@ -303,6 +310,13 @@ function initStockForm(product) {
     setDefaultDate(form);
     successEl?.classList.remove("hidden");
     loadStockHistory(product, true); // Reset pagination to show new entry
+    // Invalidate cache so dashboard reflects new stock entry immediately
+    if (typeof AppCache !== "undefined" && AppCache) {
+      AppCache.invalidateByType("dashboard_data");
+      AppCache.invalidateByType("today_sales");
+      AppCache.invalidateByType("dsr_summary");
+      AppCache.invalidateByType("profit_loss");
+    }
   });
 }
 
