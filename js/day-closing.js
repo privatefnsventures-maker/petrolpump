@@ -1,4 +1,4 @@
-/* global supabaseClient, requireAuth, applyRoleVisibility, formatCurrency, AppError, getLocalDateString */
+/* global supabaseClient, requireAuth, applyRoleVisibility, formatCurrency, AppCache, AppError, getLocalDateString */
 
 // Day closing & short: (Total sale + Collection + Short previous) − (Night cash + Phone pay + Credit + Expenses) = Today's short
 let dayClosingBreakdown = null;
@@ -200,6 +200,11 @@ async function initializeDayClosing() {
       }
       if (errorEl) errorEl.classList.add("hidden");
       await loadDayClosingBreakdown(dateStr);
+      // Invalidate cache so dashboard day-closing banners and data reflect immediately
+      if (typeof AppCache !== "undefined" && AppCache) {
+        AppCache.invalidateByType("dashboard_data");
+        AppCache.invalidateByType("recent_activity");
+      }
     } catch (err) {
       AppError.report(err, { context: "saveDayClosing" });
       const isAlreadySaved = err?.message && String(err.message).includes("already saved for this date");

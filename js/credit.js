@@ -355,6 +355,12 @@ document.addEventListener("click", async (e) => {
     msg.classList.add("muted");
     msg.textContent = "";
   }, 3500);
+
+  // Invalidate cache so dashboard (and other tabs) show updated credit immediately
+  if (typeof AppCache !== "undefined" && AppCache) {
+    AppCache.invalidateByType("credit_summary");
+    AppCache.invalidateByType("recent_activity");
+  }
   try {
     localStorage.setItem("credit-updated", String(Date.now()));
   } catch (e) {
@@ -422,6 +428,11 @@ document.addEventListener("click", async (e) => {
     }, 300);
   }
 
+  // Invalidate cache so dashboard (and other tabs) show updated credit immediately
+  if (typeof AppCache !== "undefined" && AppCache) {
+    AppCache.invalidateByType("credit_summary");
+    AppCache.invalidateByType("recent_activity");
+  }
   try {
     localStorage.setItem("credit-updated", String(Date.now()));
   } catch (e) {
