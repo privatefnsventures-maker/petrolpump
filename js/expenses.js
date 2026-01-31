@@ -1,4 +1,4 @@
-/* global supabaseClient, requireAuth, applyRoleVisibility, formatCurrency, AppError */
+/* global supabaseClient, requireAuth, applyRoleVisibility, formatCurrency, AppCache, AppError */
 
 // Category labels: loaded from expense_categories; legacy fallbacks for old DB values
 let CATEGORY_LABEL_MAP = {};
@@ -102,6 +102,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
       successEl?.classList.remove("hidden");
       loadExpenses(true);
+      // Invalidate cache so dashboard reflects new expense immediately
+      if (typeof AppCache !== "undefined" && AppCache) {
+        AppCache.invalidateByType("dashboard_data");
+        AppCache.invalidateByType("recent_activity");
+      }
     });
   }
 
