@@ -461,15 +461,19 @@ comment on table public.expense_categories is 'User-managed expense categories s
 
 alter table public.expense_categories enable row level security;
 
+drop policy if exists "expense_categories_select_authenticated" on public.expense_categories;
 create policy "expense_categories_select_authenticated" on public.expense_categories
   for select to authenticated using (true);
 
+drop policy if exists "expense_categories_insert_admin" on public.expense_categories;
 create policy "expense_categories_insert_admin" on public.expense_categories
   for insert to authenticated with check (public.is_admin());
 
+drop policy if exists "expense_categories_update_admin" on public.expense_categories;
 create policy "expense_categories_update_admin" on public.expense_categories
   for update to authenticated using (public.is_admin()) with check (public.is_admin());
 
+drop policy if exists "expense_categories_delete_admin" on public.expense_categories;
 create policy "expense_categories_delete_admin" on public.expense_categories
   for delete to authenticated using (public.is_admin());
 
@@ -639,6 +643,7 @@ create table if not exists public.credit_customers (
   customer_name text not null check (char_length(customer_name) <= 120),
   vehicle_no text check (char_length(vehicle_no) <= 32),
   amount_due numeric(14,2) not null default 0,
+  date date not null default current_date,
   last_payment date,
   notes text,
   created_by uuid references auth.users (id) on delete set null,
@@ -647,8 +652,10 @@ create table if not exists public.credit_customers (
 
 create index if not exists credit_amount_idx on public.credit_customers (amount_due desc);
 create index if not exists credit_customers_created_at_idx on public.credit_customers (created_at desc);
+create index if not exists credit_customers_date_idx on public.credit_customers (date desc);
 
 comment on table public.credit_customers is 'Credit ledger for fleet and institutional customers.';
+comment on column public.credit_customers.date is 'Date for which this credit applies; used for day-closing credit_today sum.';
 
 alter table public.credit_customers enable row level security;
 
@@ -749,7 +756,7 @@ create table if not exists public.day_closing (
   updated_at timestamp with time zone default timezone('utc'::text, now())
 );
 
-create index if exists day_closing_date_idx on public.day_closing (date desc);
+create index if not exists day_closing_date_idx on public.day_closing (date desc);
 
 comment on table public.day_closing is 'Daily cash closing: night cash (hard cash), phone pay (UPI). short_today computed from formula and stored for next day short_previous.';
 comment on column public.day_closing.night_cash is 'Hard cash counted at day end.';
@@ -834,7 +841,7 @@ begin
 
   select coalesce(sum(amount_due), 0) into v_credit_today
   from public.credit_customers
-  where (created_at at time zone 'utc')::date = p_date;
+  where date = p_date;
 
   select coalesce(sum(amount), 0) into v_expenses_today
   from public.expenses where date = p_date;
@@ -917,7 +924,7 @@ begin
 
   select coalesce(sum(amount_due), 0) into v_credit_today
   from public.credit_customers
-  where (created_at at time zone 'utc')::date = p_date;
+  where date = p_date;
 
   select coalesce(sum(amount), 0) into v_expenses_today
   from public.expenses where date = p_date;

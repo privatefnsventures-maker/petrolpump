@@ -911,14 +911,12 @@ async function loadDsrSummary(range) {
   // Use Edge Function for single round-trip (with fallback and caching)
   const dashboardData = await fetchDashboardData(range.start, range.end, onUpdate);
 
-  // Fetch credit in range (new credit ledger entries created in this period)
-  const startISO = `${range.start}T00:00:00`;
-  const endISO = `${range.end}T23:59:59.999`;
+  // Fetch credit in range (credit entries whose credit date falls in this period)
   const { data: creditRows } = await supabaseClient
     .from("credit_customers")
-    .select("amount_due, created_at")
-    .gte("created_at", startISO)
-    .lte("created_at", endISO);
+    .select("amount_due, date")
+    .gte("date", range.start)
+    .lte("date", range.end);
   dashboardData.creditData = creditRows ?? [];
 
   renderDsrSummary(dashboardData, elements);
