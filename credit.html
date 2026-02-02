@@ -102,11 +102,12 @@
             </div>
 
             <div class="form-field">
-              <label for="last-payment-date">Last payment date</label>
+              <label for="credit-date">Credit date</label>
               <input
-                id="last-payment-date"
-                name="last_payment"
+                id="credit-date"
+                name="credit_date"
                 type="date"
+                title="Day for which this credit applies (default today)"
               />
             </div>
 
@@ -135,6 +136,7 @@
               <th>Customer</th>
               <th>Vehicle</th>
               <th>Amount due (₹)</th>
+              <th>Credit date</th>
               <th>Last payment</th>
               <th>Notes</th>
               <th>Action</th>
@@ -142,7 +144,7 @@
           </thead>
           <tbody id="credit-table-body">
             <tr>
-              <td colspan="6" class="muted">Loading…</td>
+              <td colspan="7" class="muted">Loading…</td>
             </tr>
           </tbody>
         </table>
