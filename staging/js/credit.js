@@ -1,4 +1,4 @@
-/* global supabaseClient, requireAuth, applyRoleVisibility, formatCurrency, AppCache, AppError */
+/* global supabaseClient, requireAuth, applyRoleVisibility, formatCurrency, getLocalDateString, AppCache, AppError */
 
 // Pagination state
 const PAGE_SIZE = 25;
@@ -24,6 +24,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     );
   }
 
+  // Default credit date to today
+  const creditDateInput = document.getElementById("credit-date");
+  if (creditDateInput && typeof getLocalDateString === "function") {
+    creditDateInput.value = getLocalDateString();
+  }
+
   // Initialize pagination controls
   initPaginationControls();
   
@@ -45,12 +51,13 @@ async function handleCreditSubmit(event, currentUserId) {
   errorEl?.classList.add("hidden");
 
   const formData = new FormData(form);
+  const creditDate = formData.get("credit_date")?.trim() || (typeof getLocalDateString === "function" ? getLocalDateString() : new Date().toISOString().slice(0, 10));
 
   const payload = {
     customer_name: formData.get("customer_name"),
     vehicle_no: formData.get("vehicle_no") || null,
     amount_due: Number(formData.get("amount_due") || 0),
-    last_payment: formData.get("last_payment") || null,
+    date: creditDate,
     notes: formData.get("notes") || null,
   };
   if (currentUserId) {
@@ -71,6 +78,10 @@ async function handleCreditSubmit(event, currentUserId) {
   }
 
   form.reset();
+  const creditDateInput = form.querySelector("#credit-date");
+  if (creditDateInput) {
+    creditDateInput.value = typeof getLocalDateString === "function" ? getLocalDateString() : new Date().toISOString().slice(0, 10);
+  }
   if (submitBtn) {
     submitBtn.disabled = false;
     submitBtn.textContent = "Save credit entry";
@@ -163,13 +174,13 @@ async function loadCreditLedger(reset = false) {
     // Fetch data with pagination using range
     const { data, error } = await supabaseClient
       .from("credit_customers")
-      .select("id, customer_name, vehicle_no, amount_due, last_payment, notes")
+      .select("id, customer_name, vehicle_no, amount_due, date, last_payment, notes")
       .order("created_at", { ascending: false })
       .range(creditPagination.offset, creditPagination.offset + PAGE_SIZE - 1);
 
     if (error) {
       if (reset) {
-        tbody.innerHTML = `<tr><td colspan="6" class="error">${escapeHtml(AppError.getUserMessage(error))}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="error">${escapeHtml(AppError.getUserMessage(error))}</td></tr>`;
       }
       AppError.report(error, { context: "loadCreditLedger" });
       creditPagination.isLoading = false;
@@ -184,7 +195,7 @@ async function loadCreditLedger(reset = false) {
 
     // Handle empty data
     if (reset && !fetchedCount) {
-      tbody.innerHTML = "<tr><td colspan='6'><div class='empty-state'><p>No credit customers recorded yet.</p><p class='empty-cta'><a href='#credit-form'>Record credit sale above</a>.</p></div></td></tr>";
+      tbody.innerHTML = "<tr><td colspan='7'><div class='empty-state'><p>No credit customers recorded yet.</p><p class='empty-cta'><a href='#credit-form'>Record credit sale above</a>.</p></div></td></tr>";
       creditPagination.isLoading = false;
       updatePaginationUI();
       return;
@@ -214,6 +225,7 @@ async function loadCreditLedger(reset = false) {
         <td>${escapeHtml(row.customer_name)}</td>
         <td>${escapeHtml(row.vehicle_no ?? "—")}</td>
         <td data-amount="${row.amount_due}">${formatCurrency(row.amount_due)}</td>
+        <td>${row.date ?? "—"}</td>
         <td>${row.last_payment ?? "—"}</td>
         <td>${escapeHtml(row.notes ?? "—")}</td>
         <td>${actionHtml}</td>
@@ -223,7 +235,7 @@ async function loadCreditLedger(reset = false) {
 
   } catch (err) {
     if (reset) {
-      tbody.innerHTML = `<tr><td colspan="6" class="error">${escapeHtml(AppError.getUserMessage(err))}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="7" class="error">${escapeHtml(AppError.getUserMessage(err))}</td></tr>`;
     }
     AppError.report(err, { context: "loadCreditLedger" });
   } finally {
