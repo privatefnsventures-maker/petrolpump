@@ -721,17 +721,32 @@ create table if not exists public.day_closing (
   night_cash numeric(14,2) not null default 0 check (night_cash >= 0),
   phone_pay numeric(14,2) not null default 0 check (phone_pay >= 0),
   short_today numeric(14,2),
+  total_sale numeric(14,2),
+  collection numeric(14,2),
+  short_previous numeric(14,2),
+  credit_today numeric(14,2),
+  expenses_today numeric(14,2),
+  closing_reference text,
+  remarks text,
   created_by uuid references auth.users (id) on delete set null,
   created_at timestamp with time zone default timezone('utc'::text, now()),
   updated_at timestamp with time zone default timezone('utc'::text, now())
 );
 
 create index if not exists day_closing_date_idx on public.day_closing (date desc);
+create unique index if not exists day_closing_closing_reference_idx on public.day_closing (closing_reference) where closing_reference is not null;
 
-comment on table public.day_closing is 'Daily cash closing: night cash (hard cash), phone pay (UPI). short_today computed from formula and stored for next day short_previous.';
+comment on table public.day_closing is 'Daily closing statement: full snapshot for accounting and future reference. One row per date.';
 comment on column public.day_closing.night_cash is 'Hard cash counted at day end.';
 comment on column public.day_closing.phone_pay is 'Money received through PhonePe/UPI.';
-comment on column public.day_closing.short_today is 'Computed: (total_sale + collection + short_previous) - (night_cash + phone_pay + credit + expenses). Stored for next day short_previous.';
+comment on column public.day_closing.short_today is 'Computed short; stored for next day short_previous.';
+comment on column public.day_closing.total_sale is 'Total sale (₹) at closing – snapshot for accounting.';
+comment on column public.day_closing.collection is 'Collection from credit (₹) at closing – snapshot.';
+comment on column public.day_closing.short_previous is 'Short carried from previous day (₹) – snapshot.';
+comment on column public.day_closing.credit_today is 'New credit (₹) that day – snapshot.';
+comment on column public.day_closing.expenses_today is 'Expenses (₹) that day – snapshot.';
+comment on column public.day_closing.closing_reference is 'Unique reference for accounting (e.g. DC-2026-00001).';
+comment on column public.day_closing.remarks is 'Optional remarks at closing.';
 
 alter table public.day_closing enable row level security;
 
@@ -766,7 +781,7 @@ create trigger day_closing_updated_at_trigger
   before update on public.day_closing
   for each row execute function public.day_closing_updated_at();
 
--- RPC: Get day closing breakdown (for UI preview; does not save)
+-- RPC: Get day closing breakdown; when already_saved returns stored snapshot (for accounting)
 create or replace function public.get_day_closing_breakdown(p_date date)
 returns jsonb
 language plpgsql
@@ -787,6 +802,29 @@ declare
   v_existing record;
   v_already_saved boolean := false;
 begin
+  select total_sale, collection, short_previous, credit_today, expenses_today,
+         night_cash, phone_pay, short_today, closing_reference, remarks
+  into v_existing
+  from public.day_closing where date = p_date limit 1;
+  v_already_saved := found;
+
+  if v_already_saved and v_existing.total_sale is not null then
+    return jsonb_build_object(
+      'date', p_date,
+      'total_sale', v_existing.total_sale,
+      'collection', v_existing.collection,
+      'short_previous', v_existing.short_previous,
+      'credit_today', v_existing.credit_today,
+      'expenses_today', v_existing.expenses_today,
+      'night_cash', v_existing.night_cash,
+      'phone_pay', v_existing.phone_pay,
+      'short_today', v_existing.short_today,
+      'closing_reference', v_existing.closing_reference,
+      'remarks', v_existing.remarks,
+      'already_saved', true
+    );
+  end if;
+
   for v_row in
     select product, total_sales, testing, petrol_rate, diesel_rate
     from public.dsr where date = p_date
@@ -810,15 +848,27 @@ begin
   v_short_previous := coalesce(v_short_previous, 0);
 
   select coalesce(sum(amount_due), 0) into v_credit_today
-  from public.credit_customers
-  where date = p_date;
+  from public.credit_customers where date = p_date;
 
   select coalesce(sum(amount), 0) into v_expenses_today
   from public.expenses where date = p_date;
 
-  select night_cash, phone_pay, short_today into v_existing
-  from public.day_closing where date = p_date limit 1;
-  v_already_saved := found;
+  if v_already_saved then
+    return jsonb_build_object(
+      'date', p_date,
+      'total_sale', v_total_sale,
+      'collection', v_collection,
+      'short_previous', v_short_previous,
+      'credit_today', v_credit_today,
+      'expenses_today', v_expenses_today,
+      'night_cash', v_existing.night_cash,
+      'phone_pay', v_existing.phone_pay,
+      'short_today', v_existing.short_today,
+      'closing_reference', v_existing.closing_reference,
+      'remarks', v_existing.remarks,
+      'already_saved', true
+    );
+  end if;
 
   return jsonb_build_object(
     'date', p_date,
@@ -827,20 +877,23 @@ begin
     'short_previous', v_short_previous,
     'credit_today', v_credit_today,
     'expenses_today', v_expenses_today,
-    'night_cash', case when v_existing.night_cash is not null then v_existing.night_cash else null end,
-    'phone_pay', case when v_existing.phone_pay is not null then v_existing.phone_pay else null end,
-    'short_today', v_existing.short_today,
-    'already_saved', v_already_saved
+    'night_cash', null,
+    'phone_pay', null,
+    'short_today', null,
+    'closing_reference', null,
+    'remarks', null,
+    'already_saved', false
   );
 end;
 $$;
-comment on function public.get_day_closing_breakdown(date) is 'Returns day closing formula components for UI preview. Does not save. already_saved=true when day closing exists for p_date.';
+comment on function public.get_day_closing_breakdown(date) is 'Returns day closing components. When already_saved with snapshot, returns stored values for accounting.';
 
--- RPC: Save day closing and compute short_today server-side (foolproof formula)
+-- RPC: Save day closing with full statement snapshot and accounting reference
 create or replace function public.save_day_closing(
   p_date date,
   p_night_cash numeric,
-  p_phone_pay numeric
+  p_phone_pay numeric,
+  p_remarks text default null
 )
 returns jsonb
 language plpgsql
@@ -858,6 +911,8 @@ declare
   v_petrol_rate numeric;
   v_diesel_rate numeric;
   v_row record;
+  v_ref text;
+  v_seq bigint;
 begin
   if p_night_cash is null or p_night_cash < 0 then
     raise exception 'night_cash must be >= 0';
@@ -893,8 +948,7 @@ begin
   v_short_previous := coalesce(v_short_previous, 0);
 
   select coalesce(sum(amount_due), 0) into v_credit_today
-  from public.credit_customers
-  where date = p_date;
+  from public.credit_customers where date = p_date;
 
   select coalesce(sum(amount), 0) into v_expenses_today
   from public.expenses where date = p_date;
@@ -902,8 +956,25 @@ begin
   v_short_today := (v_total_sale + v_collection + v_short_previous)
     - (p_night_cash + p_phone_pay + v_credit_today + v_expenses_today);
 
-  insert into public.day_closing (date, night_cash, phone_pay, short_today, created_by)
-  values (p_date, p_night_cash, p_phone_pay, v_short_today, auth.uid());
+  select coalesce(max(
+    nullif(regexp_replace(closing_reference, '^DC-[0-9]+-([0-9]+)$', '\1'), '')::bigint
+  ), 0) + 1 into v_seq
+  from public.day_closing
+  where extract(year from date) = extract(year from p_date)
+    and closing_reference is not null
+    and closing_reference ~ '^DC-[0-9]+-[0-9]+$';
+  v_ref := 'DC-' || to_char(p_date, 'YYYY') || '-' || lpad(v_seq::text, 5, '0');
+
+  insert into public.day_closing (
+    date, night_cash, phone_pay, short_today,
+    total_sale, collection, short_previous, credit_today, expenses_today,
+    closing_reference, remarks, created_by
+  )
+  values (
+    p_date, p_night_cash, p_phone_pay, v_short_today,
+    v_total_sale, v_collection, v_short_previous, v_credit_today, v_expenses_today,
+    v_ref, nullif(trim(p_remarks), ''), auth.uid()
+  );
 
   return jsonb_build_object(
     'date', p_date,
@@ -914,11 +985,13 @@ begin
     'phone_pay', p_phone_pay,
     'credit_today', v_credit_today,
     'expenses_today', v_expenses_today,
-    'short_today', v_short_today
+    'short_today', v_short_today,
+    'closing_reference', v_ref,
+    'remarks', nullif(trim(p_remarks), '')
   );
 end;
 $$;
-comment on function public.save_day_closing(date, numeric, numeric) is 'Save day closing (night_cash, phone_pay) and compute short_today server-side. One entry per date; duplicate save raises.';
+comment on function public.save_day_closing(date, numeric, numeric, text) is 'Save day closing with full statement snapshot and accounting reference. One entry per date; duplicate save raises.';
 
 -- RPC: Record credit payment (collection) and update customer balance
 create or replace function public.record_credit_payment(
