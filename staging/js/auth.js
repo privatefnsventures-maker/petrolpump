@@ -65,30 +65,38 @@ async function fetchRoleFromStaff(email) {
 
   const fetchFn = async () => {
     const { data, error } = await supabaseClient
-      .from("staff")
-      .select("role")
+      .from("users")
+      .select("role, display_name")
       .eq("email", normalized)
       .maybeSingle();
     if (error) {
-      AppError.report(error, { context: "fetchRoleFromStaff" });
+      AppError.report(error, { context: "fetchRoleFromUsers" });
       return null;
     }
-    return data?.role ?? null;
+    return data ? { role: data.role ?? null, display_name: data.display_name?.trim() || null } : null;
   };
 
   // Use caching if available
   if (typeof AppCache !== "undefined" && AppCache) {
-    return AppCache.getWithSWR(cacheKey, fetchFn, "staff_role");
+    return AppCache.getWithSWR(cacheKey, fetchFn, "user_role");
   }
 
   return fetchFn();
 }
 
-async function resolveRoleForSession(session) {
-  if (!session) return DEFAULT_ROLE;
+async function resolveAuthForSession(session) {
+  if (!session) return { role: DEFAULT_ROLE, display_name: null };
   const email = session.user?.email;
-  const staffRole = await fetchRoleFromStaff(email);
-  return staffRole ?? extractRole(session);
+  const cached = await fetchRoleFromStaff(email);
+  if (cached) {
+    return { role: cached.role ?? extractRole(session), display_name: cached.display_name };
+  }
+  return { role: extractRole(session), display_name: null };
+}
+
+async function resolveRoleForSession(session) {
+  const auth = await resolveAuthForSession(session);
+  return auth.role;
 }
 
 /**
@@ -278,27 +286,24 @@ async function requireAuth(options = {}) {
     return null;
   }
 
-  // Resolve role from client (staff table + JWT fallback) first so we can
-  // use it when server check is missing or disagrees
-  const role = await resolveRoleForSession(session);
+  // Resolve role and display_name from users table + JWT fallback
+  const auth = await resolveAuthForSession(session);
+  const role = auth.role;
+  const display_name = auth.display_name;
 
   // Server-side verification (if pageName provided)
-  // Prefer server result; if server denies, still allow when client role is in allowedRoles
-  // (e.g. user in staff as admin but get_user_role() returned null, or RPC not deployed)
   if (pageName) {
     const accessCheck = await verifyPageAccess(pageName);
     if (accessCheck && !accessCheck.allowed) {
-      // Server says denied: only redirect if client also says not allowed
       if (Array.isArray(allowedRoles) && allowedRoles.length > 0 && !allowedRoles.includes(role)) {
         console.warn(`Access denied to ${pageName} for role: ${accessCheck.role}`);
         window.location.href = onDenied;
         return null;
       }
-      // Server denied but client says allowed (e.g. admin in staff, server had null role) – allow
-      return { session, role };
+      return { session, role, display_name };
     }
     if (accessCheck?.role) {
-      return { session, role: accessCheck.role };
+      return { session, role: accessCheck.role, display_name };
     }
   }
 
@@ -309,7 +314,7 @@ async function requireAuth(options = {}) {
     }
   }
 
-  return { session, role };
+  return { session, role, display_name };
 }
 
 /**

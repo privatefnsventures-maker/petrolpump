@@ -53,7 +53,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   async function loadStaffMembers() {
     const { data, error } = await supabaseClient
-      .from("staff_members")
+      .from("employees")
       .select("id, name, role_display, monthly_salary, display_order")
       .eq("is_active", true)
       .order("display_order", { ascending: true })
@@ -85,7 +85,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   async function loadPaymentsInRange(startDate, endDate) {
     const { data, error } = await supabaseClient
       .from("salary_payments")
-      .select("id, staff_member_id, date, amount, note")
+      .select("id, employee_id, date, amount, note")
       .gte("date", startDate)
       .lte("date", endDate)
       .order("date", { ascending: false });
@@ -100,7 +100,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   function paidByStaffInRange(payments) {
     const byStaff = new Map();
     (payments || []).forEach((p) => {
-      const id = p.staff_member_id;
+      const id = p.employee_id;
       const prev = byStaff.get(id) || 0;
       byStaff.set(id, prev + Number(p.amount ?? 0));
     });
@@ -160,7 +160,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     const { data, error } = await supabaseClient
       .from("salary_payments")
-      .select("id, staff_member_id, date, amount, note")
+      .select("id, employee_id, date, amount, note")
       .order("date", { ascending: false })
       .limit(50);
 
@@ -180,7 +180,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     tbody.innerHTML = list
       .map((p) => {
-        const staff = staffById.get(p.staff_member_id);
+        const staff = staffById.get(p.employee_id);
         const name = staff ? escapeHtml(staff.name) : "—";
         return `
           <tr>
@@ -199,7 +199,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!tbody) return;
 
     const { data, error } = await supabaseClient
-      .from("staff_members")
+      .from("employees")
       .select("id, name, role_display, monthly_salary, display_order")
       .order("display_order", { ascending: true })
       .order("name", { ascending: true });
@@ -284,7 +284,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
 
       const payload = {
-        staff_member_id: staffId,
+        employee_id: staffId,
         date: date,
         amount: amount,
         note: note,
@@ -362,14 +362,14 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (auth.session?.user?.id) payload.created_by = auth.session.user.id;
 
       if (id) {
-        const { error } = await supabaseClient.from("staff_members").update(payload).eq("id", id);
+        const { error } = await supabaseClient.from("employees").update(payload).eq("id", id);
         if (staffSubmitBtn) { staffSubmitBtn.disabled = false; staffSubmitBtn.textContent = staffCancelBtn?.classList.contains("hidden") ? "Add staff" : "Update"; }
         if (error) {
           AppError.handle(error, { target: staffFormError });
           return;
         }
       } else {
-        const { error } = await supabaseClient.from("staff_members").insert(payload);
+        const { error } = await supabaseClient.from("employees").insert(payload);
         if (staffSubmitBtn) { staffSubmitBtn.disabled = false; staffSubmitBtn.textContent = "Add staff"; }
         if (error) {
           AppError.handle(error, { target: staffFormError });

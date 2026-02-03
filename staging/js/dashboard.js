@@ -164,9 +164,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   const operatorNameEl = document.getElementById("operator-name");
   const operatorRoleEl = document.getElementById("operator-role");
   if (operatorNameEl) {
-    const email = session.user?.email ?? "";
-    const nameOnly = email.includes("@") ? email.split("@")[0] : email || "User";
-    operatorNameEl.textContent = nameOnly;
+    const nameToShow = auth.display_name?.trim() || (() => {
+      const email = session.user?.email ?? "";
+      return email.includes("@") ? email.split("@")[0] : email || "User";
+    })();
+    operatorNameEl.textContent = nameToShow;
   }
   if (operatorRoleEl && role) {
     const roleLabel = role.charAt(0).toUpperCase() + role.slice(1);
