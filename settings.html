@@ -78,6 +78,16 @@
               />
             </div>
             <div class="form-field">
+              <label for="staff-display-name">Display name</label>
+              <input
+                id="staff-display-name"
+                name="display_name"
+                type="text"
+                placeholder="Name shown in app"
+                maxlength="120"
+              />
+            </div>
+            <div class="form-field">
               <label for="staff-role">Role</label>
               <select id="staff-role" name="role" required>
                 <option value="supervisor">Supervisor</option>
@@ -180,13 +190,14 @@
           <thead>
             <tr>
               <th>Email</th>
+              <th>Display name</th>
               <th>Role</th>
               <th>Created</th>
             </tr>
           </thead>
           <tbody id="settings-table-body">
             <tr>
-              <td colspan="3" class="muted">Loading…</td>
+              <td colspan="4" class="muted">Loading…</td>
             </tr>
           </tbody>
         </table>

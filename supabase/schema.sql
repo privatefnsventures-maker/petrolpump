@@ -17,7 +17,7 @@ create extension if not exists "uuid-ossp";
 -- ROLE HELPER FUNCTIONS (Security Definer - bypasses RLS for internal checks)
 -- ============================================================================
 
--- Get the current user's role from staff table or JWT metadata
+-- Get the current user's role from users table or JWT metadata
 -- Returns 'admin', 'supervisor', or null if not found
 create or replace function public.get_user_role()
 returns text
@@ -26,9 +26,7 @@ security definer
 stable
 as $$
   select coalesce(
-    -- First check staff table (source of truth); match email case-insensitively
-    (select role from public.staff where lower(trim(email)) = lower(trim(auth.jwt() ->> 'email')) limit 1),
-    -- Fallback to JWT metadata
+    (select role from public.users where lower(trim(email)) = lower(trim(auth.jwt() ->> 'email')) limit 1),
     (auth.jwt() -> 'user_metadata' ->> 'role'),
     (auth.jwt() -> 'app_metadata' ->> 'role')
   );
@@ -138,10 +136,11 @@ create policy "audit_log_no_direct_write" on public.audit_log
 -- SECURE ADMIN FUNCTIONS (Server-side enforcement for critical operations)
 -- ============================================================================
 
--- Secure function to add/update staff (admin-only, server-side validation)
+-- Secure function to add/update app user (admin-only, server-side validation)
 create or replace function public.upsert_staff(
   p_email text,
-  p_role text
+  p_role text,
+  p_display_name text default null
 )
 returns jsonb
 language plpgsql
@@ -150,61 +149,47 @@ as $$
 declare
   v_result jsonb;
 begin
-  -- Validate admin access
   if not public.is_admin() then
-    -- Allow first admin creation when no admins exist
-    if exists (select 1 from public.staff where role = 'admin') then
+    if exists (select 1 from public.users where role = 'admin') then
       raise exception 'Access denied: Admin role required';
     end if;
   end if;
-
-  -- Validate role
   if p_role not in ('admin', 'supervisor') then
     raise exception 'Invalid role: must be admin or supervisor';
   end if;
-
-  -- Validate email
   if p_email is null or trim(p_email) = '' then
     raise exception 'Email is required';
   end if;
 
-  -- Perform upsert
-  insert into public.staff (email, role)
-  values (lower(trim(p_email)), p_role)
-  on conflict (email) do update set role = p_role
-  returning jsonb_build_object('id', id, 'email', email, 'role', role) into v_result;
-
+  insert into public.users (email, role, display_name)
+  values (lower(trim(p_email)), p_role, nullif(trim(p_display_name), ''))
+  on conflict (email) do update set role = excluded.role, display_name = excluded.display_name
+  returning jsonb_build_object('id', id, 'email', email, 'role', role, 'display_name', display_name) into v_result;
   return v_result;
 end;
 $$;
 
-comment on function public.upsert_staff(text, text) is 'Securely add or update staff with server-side admin validation.';
+comment on function public.upsert_staff(text, text, text) is 'Securely add or update app user (users table) with server-side admin validation.';
 
--- Secure function to delete staff (admin-only, with audit)
+-- Secure function to delete app user (admin-only, with audit)
 create or replace function public.delete_staff(p_email text)
 returns boolean
 language plpgsql
 security definer
 as $$
 begin
-  -- Validate admin access
   if not public.is_admin() then
     raise exception 'Access denied: Admin role required';
   end if;
-
-  -- Prevent self-deletion
   if lower(trim(p_email)) = lower(auth.jwt() ->> 'email') then
     raise exception 'Cannot delete your own account';
   end if;
-
-  -- Delete the staff record
-  delete from public.staff where email = lower(trim(p_email));
-  
+  delete from public.users where email = lower(trim(p_email));
   return found;
 end;
 $$;
 
-comment on function public.delete_staff(text) is 'Securely delete staff with server-side admin validation.';
+comment on function public.delete_staff(text) is 'Securely delete app user with server-side admin validation.';
 
 -- Function to validate user has access to a specific page/feature
 -- Can be called from client to verify access before showing sensitive data
@@ -477,55 +462,41 @@ drop policy if exists "expense_categories_delete_admin" on public.expense_catego
 create policy "expense_categories_delete_admin" on public.expense_categories
   for delete to authenticated using (public.is_admin());
 
--- Staff access roles
-create table if not exists public.staff (
+-- App users (login / operator roles; display_name shown in UI)
+create table if not exists public.users (
   id uuid primary key default uuid_generate_v4(),
   email text not null unique,
   role text not null check (role in ('admin', 'supervisor')),
+  display_name text check (display_name is null or (char_length(trim(display_name)) <= 120)),
   created_at timestamp with time zone default timezone('utc'::text, now())
 );
 
-create index if not exists staff_email_idx on public.staff (email);
+create index if not exists users_email_idx on public.users (email);
 
-comment on table public.staff is 'Operator access roles for the dashboard.';
+comment on table public.users is 'App users (login / operator roles). Display name shown in UI.';
+comment on column public.users.display_name is 'Name shown in the app (e.g. welcome message). Optional; falls back to email if empty.';
 
-alter table public.staff enable row level security;
+alter table public.users enable row level security;
 
--- SELECT: All authenticated users can view all staff records
--- Note: is_admin() function uses SECURITY DEFINER so it bypasses RLS
-drop policy if exists "staff_select_authenticated" on public.staff;
-drop policy if exists "staff_select_by_role" on public.staff;
-create policy "staff_select_authenticated" on public.staff
-  for select
-  to authenticated
-  using (true);
--- INSERT: Only admins can add staff (or first user when no admin exists)
-drop policy if exists "staff_insert_admin" on public.staff;
-create policy "staff_insert_admin" on public.staff
-  for insert
-  to authenticated
-  with check (
-    public.is_admin()
-    or not exists (select 1 from public.staff s where s.role = 'admin')
-  );
+drop policy if exists "users_select_authenticated" on public.users;
+create policy "users_select_authenticated" on public.users
+  for select to authenticated using (true);
 
--- UPDATE: Only admins can modify staff records
-drop policy if exists "staff_update_admin" on public.staff;
-create policy "staff_update_admin" on public.staff
-  for update
-  to authenticated
-  using (public.is_admin())
-  with check (public.is_admin());
+drop policy if exists "users_insert_admin" on public.users;
+create policy "users_insert_admin" on public.users
+  for insert to authenticated
+  with check (public.is_admin() or not exists (select 1 from public.users u where u.role = 'admin'));
 
--- DELETE: Only admins can remove staff
-drop policy if exists "staff_delete_admin" on public.staff;
-create policy "staff_delete_admin" on public.staff
-  for delete
-  to authenticated
-  using (public.is_admin());
+drop policy if exists "users_update_admin" on public.users;
+create policy "users_update_admin" on public.users
+  for update to authenticated using (public.is_admin()) with check (public.is_admin());
 
--- Staff members (salary recipients: 5 staff including supervisor - distinct from login staff)
-create table if not exists public.staff_members (
+drop policy if exists "users_delete_admin" on public.users;
+create policy "users_delete_admin" on public.users
+  for delete to authenticated using (public.is_admin());
+
+-- Employees (pump staff who receive salary – distinct from app users)
+create table if not exists public.employees (
   id uuid primary key default uuid_generate_v4(),
   name text not null check (char_length(trim(name)) > 0 and char_length(name) <= 120),
   role_display text check (char_length(role_display) <= 60),
@@ -536,35 +507,34 @@ create table if not exists public.staff_members (
   created_at timestamp with time zone default timezone('utc'::text, now())
 );
 
-create index if not exists staff_members_display_order_idx on public.staff_members (display_order, name);
+create index if not exists employees_display_order_idx on public.employees (display_order, name);
 
-comment on table public.staff_members is 'Pump staff who receive salary (e.g. supervisor + 4 operators). Used for installment salary tracking.';
+comment on table public.employees is 'Pump employees who receive salary (e.g. supervisor + operators). Used for salary and attendance.';
 
-alter table public.staff_members enable row level security;
+alter table public.employees enable row level security;
 
-drop policy if exists "staff_members_select_authenticated" on public.staff_members;
-create policy "staff_members_select_authenticated" on public.staff_members
+drop policy if exists "employees_select_authenticated" on public.employees;
+create policy "employees_select_authenticated" on public.employees
   for select to authenticated using (true);
 
-drop policy if exists "staff_members_insert_own_or_admin" on public.staff_members;
-create policy "staff_members_insert_own_or_admin" on public.staff_members
-  for insert to authenticated
-  with check (created_by = auth.uid() or public.is_admin());
+drop policy if exists "employees_insert_own_or_admin" on public.employees;
+create policy "employees_insert_own_or_admin" on public.employees
+  for insert to authenticated with check (created_by = auth.uid() or public.is_admin());
 
-drop policy if exists "staff_members_update_by_role" on public.staff_members;
-create policy "staff_members_update_by_role" on public.staff_members
+drop policy if exists "employees_update_by_role" on public.employees;
+create policy "employees_update_by_role" on public.employees
   for update to authenticated
   using (created_by = auth.uid() or public.is_admin())
   with check (created_by = auth.uid() or public.is_admin());
 
-drop policy if exists "staff_members_delete_admin" on public.staff_members;
-create policy "staff_members_delete_admin" on public.staff_members
+drop policy if exists "employees_delete_admin" on public.employees;
+create policy "employees_delete_admin" on public.employees
   for delete to authenticated using (public.is_admin());
 
--- Salary payments (installments: staff take salary in parts on different days)
+-- Salary payments (installments: employees receive salary in parts on different days)
 create table if not exists public.salary_payments (
   id uuid primary key default uuid_generate_v4(),
-  staff_member_id uuid not null references public.staff_members (id) on delete restrict,
+  employee_id uuid not null references public.employees (id) on delete restrict,
   date date not null,
   amount numeric(14,2) not null check (amount > 0),
   note text check (char_length(note) <= 200),
@@ -572,10 +542,10 @@ create table if not exists public.salary_payments (
   created_at timestamp with time zone default timezone('utc'::text, now())
 );
 
-create index if not exists salary_payments_staff_date_idx on public.salary_payments (staff_member_id, date desc);
+create index if not exists salary_payments_employee_date_idx on public.salary_payments (employee_id, date desc);
 create index if not exists salary_payments_date_idx on public.salary_payments (date desc);
 
-comment on table public.salary_payments is 'Installment salary payments to staff. One row per payment (e.g. 2000 today, 3000 next week).';
+comment on table public.salary_payments is 'Installment salary payments to employees. One row per payment (e.g. 2000 today, 3000 next week).';
 
 alter table public.salary_payments enable row level security;
 
@@ -597,10 +567,10 @@ drop policy if exists "salary_payments_delete_admin" on public.salary_payments;
 create policy "salary_payments_delete_admin" on public.salary_payments
   for delete to authenticated using (public.is_admin());
 
--- Staff attendance (one row per staff_member per date: present/absent/half_day/leave, optional check-in/out)
-create table if not exists public.staff_attendance (
+-- Employee attendance (one row per employee per date: present/absent/half_day/leave, optional check-in/out)
+create table if not exists public.employee_attendance (
   id uuid primary key default uuid_generate_v4(),
-  staff_member_id uuid not null references public.staff_members (id) on delete restrict,
+  employee_id uuid not null references public.employees (id) on delete restrict,
   date date not null,
   status text not null check (status in ('present', 'absent', 'half_day', 'leave')),
   check_in time,
@@ -609,32 +579,32 @@ create table if not exists public.staff_attendance (
   created_by uuid references auth.users (id) on delete set null,
   created_at timestamp with time zone default timezone('utc'::text, now()),
   updated_at timestamp with time zone default timezone('utc'::text, now()),
-  unique (staff_member_id, date)
+  unique (employee_id, date)
 );
 
-create index if not exists staff_attendance_date_idx on public.staff_attendance (date desc);
-create index if not exists staff_attendance_staff_date_idx on public.staff_attendance (staff_member_id, date desc);
+create index if not exists employee_attendance_date_idx on public.employee_attendance (date desc);
+create index if not exists employee_attendance_employee_date_idx on public.employee_attendance (employee_id, date desc);
 
-comment on table public.staff_attendance is 'Daily attendance for staff members (present/absent/half_day/leave with optional check-in/out times).';
+comment on table public.employee_attendance is 'Daily attendance for employees (present/absent/half_day/leave with optional check-in/out).';
 
-alter table public.staff_attendance enable row level security;
+alter table public.employee_attendance enable row level security;
 
-drop policy if exists "staff_attendance_select_authenticated" on public.staff_attendance;
-create policy "staff_attendance_select_authenticated" on public.staff_attendance
+drop policy if exists "employee_attendance_select_authenticated" on public.employee_attendance;
+create policy "employee_attendance_select_authenticated" on public.employee_attendance
   for select to authenticated using (true);
 
-drop policy if exists "staff_attendance_insert_own" on public.staff_attendance;
-create policy "staff_attendance_insert_own" on public.staff_attendance
+drop policy if exists "employee_attendance_insert_own" on public.employee_attendance;
+create policy "employee_attendance_insert_own" on public.employee_attendance
   for insert to authenticated with check (created_by = auth.uid());
 
-drop policy if exists "staff_attendance_update_own" on public.staff_attendance;
-create policy "staff_attendance_update_own" on public.staff_attendance
+drop policy if exists "employee_attendance_update_own" on public.employee_attendance;
+create policy "employee_attendance_update_own" on public.employee_attendance
   for update to authenticated
   using (created_by = auth.uid() or public.is_admin())
   with check (created_by = auth.uid() or public.is_admin());
 
-drop policy if exists "staff_attendance_delete_admin" on public.staff_attendance;
-create policy "staff_attendance_delete_admin" on public.staff_attendance
+drop policy if exists "employee_attendance_delete_admin" on public.employee_attendance;
+create policy "employee_attendance_delete_admin" on public.employee_attendance
   for delete to authenticated using (public.is_admin());
 
 -- Credit customers ledger
@@ -1028,10 +998,11 @@ $$;
 
 comment on function public.audit_trigger_fn() is 'Generic trigger function for audit logging.';
 
--- Audit triggers for sensitive tables (staff: full trail; financial: full trail)
-drop trigger if exists audit_staff_trigger on public.staff;
-create trigger audit_staff_trigger
-  after insert or update or delete on public.staff
+-- Audit triggers for sensitive tables (users: full trail; financial: full trail)
+drop trigger if exists audit_staff_trigger on public.users;
+drop trigger if exists audit_users_trigger on public.users;
+create trigger audit_users_trigger
+  after insert or update or delete on public.users
   for each row execute function public.audit_trigger_fn();
 
 -- DSR: full audit (insert, update, delete) - who changed what and when
@@ -1063,9 +1034,10 @@ create trigger audit_credit_trigger
   for each row execute function public.audit_trigger_fn();
 
 -- Staff members: full audit
-drop trigger if exists audit_staff_members_trigger on public.staff_members;
-create trigger audit_staff_members_trigger
-  after insert or update or delete on public.staff_members
+drop trigger if exists audit_staff_members_trigger on public.employees;
+drop trigger if exists audit_employees_trigger on public.employees;
+create trigger audit_employees_trigger
+  after insert or update or delete on public.employees
   for each row execute function public.audit_trigger_fn();
 
 -- Salary payments: full audit
@@ -1075,9 +1047,10 @@ create trigger audit_salary_payments_trigger
   for each row execute function public.audit_trigger_fn();
 
 -- Staff attendance: full audit
-drop trigger if exists audit_staff_attendance_trigger on public.staff_attendance;
-create trigger audit_staff_attendance_trigger
-  after insert or update or delete on public.staff_attendance
+drop trigger if exists audit_staff_attendance_trigger on public.employee_attendance;
+drop trigger if exists audit_employee_attendance_trigger on public.employee_attendance;
+create trigger audit_employee_attendance_trigger
+  after insert or update or delete on public.employee_attendance
   for each row execute function public.audit_trigger_fn();
 
 -- Credit payments: full audit
