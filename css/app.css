@@ -19,6 +19,29 @@ tbody tr:hover {
   margin-top: 1rem;
 }
 
+.margin-bottom {
+  margin-bottom: 1rem;
+}
+
+.form-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.form-inline label { margin: 0; }
+.form-inline input[type="date"] { width: auto; }
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.day-closing-register-table { font-size: 0.9rem; }
+.day-closing-register-table th,
+.day-closing-register-table td { padding: 0.5rem 0.4rem; white-space: nowrap; }
+.day-closing-register-table td:last-child { white-space: normal; max-width: 12rem; }
+
 /* Settle and delete inline actions */
 .settle-inline {
   display: flex;

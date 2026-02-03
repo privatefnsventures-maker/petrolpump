@@ -79,6 +79,8 @@ async function loadDayClosingBreakdown(dateStr) {
   const alreadySaved = !!b.already_saved;
   const saveBtn = document.getElementById("day-closing-save");
   const alreadySavedEl = document.getElementById("day-closing-already-saved");
+  const referenceLine = document.getElementById("dc-reference-line");
+  const remarksInput = document.getElementById("dc-remarks");
   if (saveBtn) saveBtn.disabled = alreadySaved;
   if (alreadySavedEl) {
     if (alreadySaved) {
@@ -86,6 +88,18 @@ async function loadDayClosingBreakdown(dateStr) {
     } else {
       alreadySavedEl.classList.add("hidden");
     }
+  }
+  if (referenceLine) {
+    if (b.closing_reference) {
+      referenceLine.textContent = "Reference: " + b.closing_reference + (b.remarks ? " · " + b.remarks : "");
+      referenceLine.classList.remove("hidden");
+    } else {
+      referenceLine.classList.add("hidden");
+    }
+  }
+  if (remarksInput) {
+    remarksInput.value = b.remarks ?? "";
+    remarksInput.disabled = !!alreadySaved;
   }
   successEl?.classList.add("hidden");
 
@@ -158,6 +172,7 @@ async function initializeDayClosing() {
     const dateStr = dateInput.value?.trim();
     const nightCash = Number(document.getElementById("dc-night-cash")?.value ?? 0);
     const phonePay = Number(document.getElementById("dc-phone-pay")?.value ?? 0);
+    const remarks = document.getElementById("dc-remarks")?.value?.trim() || null;
     if (!dateStr) {
       if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Save day closing"; }
       if (errorEl) {
@@ -190,13 +205,20 @@ async function initializeDayClosing() {
         p_date: dateStr,
         p_night_cash: nightCash,
         p_phone_pay: phonePay,
+        p_remarks: remarks,
       });
       if (error) throw error;
       dayClosingBreakdown = data;
       updateDayClosingShortLive();
       if (successEl) {
+        const refPart = data?.closing_reference ? " Reference: " + data.closing_reference + "." : "";
         successEl.classList.remove("hidden");
-        successEl.textContent = "Day closing saved. Today's short: " + formatCurrency(Number(data?.short_today ?? 0)) + " (stored for next day).";
+        successEl.textContent = "Day closing saved." + refPart + " Today's short: " + formatCurrency(Number(data?.short_today ?? 0)) + " (stored for next day).";
+      }
+      const referenceLine = document.getElementById("dc-reference-line");
+      if (referenceLine && data?.closing_reference) {
+        referenceLine.textContent = "Reference: " + data.closing_reference + (data.remarks ? " · " + data.remarks : "");
+        referenceLine.classList.remove("hidden");
       }
       if (errorEl) errorEl.classList.add("hidden");
       await loadDayClosingBreakdown(dateStr);
@@ -235,6 +257,72 @@ async function initializeDayClosing() {
   }
 
   await loadDayClosingBreakdown(dateInput.value || todayStr);
+
+  // Day closing register: date range and load
+  const registerStart = document.getElementById("dc-register-start");
+  const registerEnd = document.getElementById("dc-register-end");
+  const registerLoadBtn = document.getElementById("dc-register-load");
+  const registerBody = document.getElementById("dc-register-body");
+  if (registerStart && registerEnd && registerLoadBtn && registerBody) {
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 30);
+    registerEnd.value = endDate.toISOString().slice(0, 10);
+    registerStart.value = startDate.toISOString().slice(0, 10);
+
+    registerLoadBtn.addEventListener("click", async () => {
+      const start = registerStart.value?.trim();
+      const end = registerEnd.value?.trim();
+      if (!start || !end) return;
+      registerLoadBtn.disabled = true;
+      registerBody.innerHTML = "<tr><td colspan='11' class='muted'>Loading…</td></tr>";
+      try {
+        const { data, error } = await supabaseClient
+          .from("day_closing")
+          .select("date, closing_reference, total_sale, collection, short_previous, credit_today, expenses_today, night_cash, phone_pay, short_today, remarks")
+          .gte("date", start)
+          .lte("date", end)
+          .order("date", { ascending: false });
+        if (error) throw error;
+        if (!data?.length) {
+          registerBody.innerHTML = "<tr><td colspan='11' class='muted'>No closing statements in this range.</td></tr>";
+          return;
+        }
+        registerBody.innerHTML = data.map((row) => {
+          const d = row.date;
+          const ref = row.closing_reference ?? "—";
+          const fmt = (v) => (v != null && v !== "" ? formatCurrency(Number(v)) : "—");
+          return `<tr>
+            <td>${d}</td>
+            <td><code>${escapeHtml(ref)}</code></td>
+            <td>${fmt(row.total_sale)}</td>
+            <td>${fmt(row.collection)}</td>
+            <td>${fmt(row.short_previous)}</td>
+            <td>${fmt(row.credit_today)}</td>
+            <td>${fmt(row.expenses_today)}</td>
+            <td>${fmt(row.night_cash)}</td>
+            <td>${fmt(row.phone_pay)}</td>
+            <td>${fmt(row.short_today)}</td>
+            <td>${escapeHtml(row.remarks ?? "—")}</td>
+          </tr>`;
+        }).join("");
+      } catch (err) {
+        AppError.report(err, { context: "loadDayClosingRegister" });
+        registerBody.innerHTML = "<tr><td colspan='11' class='error'>" + escapeHtml(err?.message || "Failed to load.") + "</td></tr>";
+      } finally {
+        registerLoadBtn.disabled = false;
+      }
+    });
+  }
+}
+
+function escapeHtml(str) {
+  if (str == null) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 document.addEventListener("DOMContentLoaded", async () => {

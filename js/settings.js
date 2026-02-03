@@ -50,19 +50,19 @@ document.addEventListener("DOMContentLoaded", async () => {
         return;
       }
 
-      const { data: existingStaff, error: staffError } = await supabaseClient
-        .from("staff")
+      const { data: existingUser, error: userError } = await supabaseClient
+        .from("users")
         .select("id")
         .eq("email", email)
         .maybeSingle();
 
-      if (staffError) {
+      if (userError) {
         if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Save role"; }
-        AppError.handle(staffError, { target: errorEl });
+        AppError.handle(userError, { target: errorEl });
         return;
       }
 
-      if (!existingStaff && !password) {
+      if (!existingUser && !password) {
         if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Save role"; }
         if (errorEl) {
           errorEl.textContent =
@@ -84,11 +84,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
       }
 
-      // Use secure server-side function for staff management
-      // This validates admin role on the server regardless of client-side state
+      const displayName = formData.get("display_name")?.trim() || null;
       const { data, error } = await supabaseClient.rpc("upsert_staff", {
         p_email: email,
         p_role: role,
+        p_display_name: displayName || null,
       });
 
       if (submitBtn) {
@@ -107,11 +107,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (typeof invalidateUserRoleCache === "function") {
         invalidateUserRoleCache(email);
       }
-      // Invalidate staff list cache
       if (typeof AppCache !== "undefined" && AppCache) {
         AppCache.invalidateByType("staff_list");
       }
-      
       loadStaffList();
     });
   }
@@ -325,21 +323,21 @@ function initAlertsForm() {
 async function loadStaffList() {
   const tbody = document.getElementById("settings-table-body");
   if (!tbody) return;
-  tbody.innerHTML = "<tr><td colspan='3' class='muted'>Loading…</td></tr>";
+  tbody.innerHTML = "<tr><td colspan='4' class='muted'>Loading…</td></tr>";
 
   const { data, error } = await supabaseClient
-    .from("staff")
-    .select("email, role, created_at")
+    .from("users")
+    .select("email, display_name, role, created_at")
     .order("created_at", { ascending: false });
 
   if (error) {
-    tbody.innerHTML = `<tr><td colspan='3' class='error'>${escapeHtml(AppError.getUserMessage(error))}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan='4' class='error'>${escapeHtml(AppError.getUserMessage(error))}</td></tr>`;
     AppError.report(error, { context: "loadStaffList" });
     return;
   }
 
   if (!data?.length) {
-    tbody.innerHTML = "<tr><td colspan='3' class='muted'>No users yet.</td></tr>";
+    tbody.innerHTML = "<tr><td colspan='4' class='muted'>No users yet.</td></tr>";
     return;
   }
 
@@ -348,6 +346,7 @@ async function loadStaffList() {
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${escapeHtml(row.email)}</td>
+      <td>${escapeHtml(row.display_name ?? "—")}</td>
       <td>${escapeHtml(row.role)}</td>
       <td>${formatDate(row.created_at)}</td>
     `;

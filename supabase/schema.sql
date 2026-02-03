@@ -17,7 +17,7 @@ create extension if not exists "uuid-ossp";
 -- ROLE HELPER FUNCTIONS (Security Definer - bypasses RLS for internal checks)
 -- ============================================================================
 
--- Get the current user's role from staff table or JWT metadata
+-- Get the current user's role from users table or JWT metadata
 -- Returns 'admin', 'supervisor', or null if not found
 create or replace function public.get_user_role()
 returns text
@@ -26,9 +26,7 @@ security definer
 stable
 as $$
   select coalesce(
-    -- First check staff table (source of truth); match email case-insensitively
-    (select role from public.staff where lower(trim(email)) = lower(trim(auth.jwt() ->> 'email')) limit 1),
-    -- Fallback to JWT metadata
+    (select role from public.users where lower(trim(email)) = lower(trim(auth.jwt() ->> 'email')) limit 1),
     (auth.jwt() -> 'user_metadata' ->> 'role'),
     (auth.jwt() -> 'app_metadata' ->> 'role')
   );
@@ -138,10 +136,11 @@ create policy "audit_log_no_direct_write" on public.audit_log
 -- SECURE ADMIN FUNCTIONS (Server-side enforcement for critical operations)
 -- ============================================================================
 
--- Secure function to add/update staff (admin-only, server-side validation)
+-- Secure function to add/update app user (admin-only, server-side validation)
 create or replace function public.upsert_staff(
   p_email text,
-  p_role text
+  p_role text,
+  p_display_name text default null
 )
 returns jsonb
 language plpgsql
@@ -150,61 +149,47 @@ as $$
 declare
   v_result jsonb;
 begin
-  -- Validate admin access
   if not public.is_admin() then
-    -- Allow first admin creation when no admins exist
-    if exists (select 1 from public.staff where role = 'admin') then
+    if exists (select 1 from public.users where role = 'admin') then
       raise exception 'Access denied: Admin role required';
     end if;
   end if;
-
-  -- Validate role
   if p_role not in ('admin', 'supervisor') then
     raise exception 'Invalid role: must be admin or supervisor';
   end if;
-
-  -- Validate email
   if p_email is null or trim(p_email) = '' then
     raise exception 'Email is required';
   end if;
 
-  -- Perform upsert
-  insert into public.staff (email, role)
-  values (lower(trim(p_email)), p_role)
-  on conflict (email) do update set role = p_role
-  returning jsonb_build_object('id', id, 'email', email, 'role', role) into v_result;
-
+  insert into public.users (email, role, display_name)
+  values (lower(trim(p_email)), p_role, nullif(trim(p_display_name), ''))
+  on conflict (email) do update set role = excluded.role, display_name = excluded.display_name
+  returning jsonb_build_object('id', id, 'email', email, 'role', role, 'display_name', display_name) into v_result;
   return v_result;
 end;
 $$;
 
-comment on function public.upsert_staff(text, text) is 'Securely add or update staff with server-side admin validation.';
+comment on function public.upsert_staff(text, text, text) is 'Securely add or update app user (users table) with server-side admin validation.';
 
--- Secure function to delete staff (admin-only, with audit)
+-- Secure function to delete app user (admin-only, with audit)
 create or replace function public.delete_staff(p_email text)
 returns boolean
 language plpgsql
 security definer
 as $$
 begin
-  -- Validate admin access
   if not public.is_admin() then
     raise exception 'Access denied: Admin role required';
   end if;
-
-  -- Prevent self-deletion
   if lower(trim(p_email)) = lower(auth.jwt() ->> 'email') then
     raise exception 'Cannot delete your own account';
   end if;
-
-  -- Delete the staff record
-  delete from public.staff where email = lower(trim(p_email));
-  
+  delete from public.users where email = lower(trim(p_email));
   return found;
 end;
 $$;
 
-comment on function public.delete_staff(text) is 'Securely delete staff with server-side admin validation.';
+comment on function public.delete_staff(text) is 'Securely delete app user with server-side admin validation.';
 
 -- Function to validate user has access to a specific page/feature
 -- Can be called from client to verify access before showing sensitive data
@@ -477,55 +462,41 @@ drop policy if exists "expense_categories_delete_admin" on public.expense_catego
 create policy "expense_categories_delete_admin" on public.expense_categories
   for delete to authenticated using (public.is_admin());
 
--- Staff access roles
-create table if not exists public.staff (
+-- App users (login / operator roles; display_name shown in UI)
+create table if not exists public.users (
   id uuid primary key default uuid_generate_v4(),
   email text not null unique,
   role text not null check (role in ('admin', 'supervisor')),
+  display_name text check (display_name is null or (char_length(trim(display_name)) <= 120)),
   created_at timestamp with time zone default timezone('utc'::text, now())
 );
 
-create index if not exists staff_email_idx on public.staff (email);
+create index if not exists users_email_idx on public.users (email);
 
-comment on table public.staff is 'Operator access roles for the dashboard.';
+comment on table public.users is 'App users (login / operator roles). Display name shown in UI.';
+comment on column public.users.display_name is 'Name shown in the app (e.g. welcome message). Optional; falls back to email if empty.';
 
-alter table public.staff enable row level security;
+alter table public.users enable row level security;
 
--- SELECT: All authenticated users can view all staff records
--- Note: is_admin() function uses SECURITY DEFINER so it bypasses RLS
-drop policy if exists "staff_select_authenticated" on public.staff;
-drop policy if exists "staff_select_by_role" on public.staff;
-create policy "staff_select_authenticated" on public.staff
-  for select
-  to authenticated
-  using (true);
--- INSERT: Only admins can add staff (or first user when no admin exists)
-drop policy if exists "staff_insert_admin" on public.staff;
-create policy "staff_insert_admin" on public.staff
-  for insert
-  to authenticated
-  with check (
-    public.is_admin()
-    or not exists (select 1 from public.staff s where s.role = 'admin')
-  );
+drop policy if exists "users_select_authenticated" on public.users;
+create policy "users_select_authenticated" on public.users
+  for select to authenticated using (true);
 
--- UPDATE: Only admins can modify staff records
-drop policy if exists "staff_update_admin" on public.staff;
-create policy "staff_update_admin" on public.staff
-  for update
-  to authenticated
-  using (public.is_admin())
-  with check (public.is_admin());
+drop policy if exists "users_insert_admin" on public.users;
+create policy "users_insert_admin" on public.users
+  for insert to authenticated
+  with check (public.is_admin() or not exists (select 1 from public.users u where u.role = 'admin'));
 
--- DELETE: Only admins can remove staff
-drop policy if exists "staff_delete_admin" on public.staff;
-create policy "staff_delete_admin" on public.staff
-  for delete
-  to authenticated
-  using (public.is_admin());
+drop policy if exists "users_update_admin" on public.users;
+create policy "users_update_admin" on public.users
+  for update to authenticated using (public.is_admin()) with check (public.is_admin());
 
--- Staff members (salary recipients: 5 staff including supervisor - distinct from login staff)
-create table if not exists public.staff_members (
+drop policy if exists "users_delete_admin" on public.users;
+create policy "users_delete_admin" on public.users
+  for delete to authenticated using (public.is_admin());
+
+-- Employees (pump staff who receive salary – distinct from app users)
+create table if not exists public.employees (
   id uuid primary key default uuid_generate_v4(),
   name text not null check (char_length(trim(name)) > 0 and char_length(name) <= 120),
   role_display text check (char_length(role_display) <= 60),
@@ -536,35 +507,34 @@ create table if not exists public.staff_members (
   created_at timestamp with time zone default timezone('utc'::text, now())
 );
 
-create index if not exists staff_members_display_order_idx on public.staff_members (display_order, name);
+create index if not exists employees_display_order_idx on public.employees (display_order, name);
 
-comment on table public.staff_members is 'Pump staff who receive salary (e.g. supervisor + 4 operators). Used for installment salary tracking.';
+comment on table public.employees is 'Pump employees who receive salary (e.g. supervisor + operators). Used for salary and attendance.';
 
-alter table public.staff_members enable row level security;
+alter table public.employees enable row level security;
 
-drop policy if exists "staff_members_select_authenticated" on public.staff_members;
-create policy "staff_members_select_authenticated" on public.staff_members
+drop policy if exists "employees_select_authenticated" on public.employees;
+create policy "employees_select_authenticated" on public.employees
   for select to authenticated using (true);
 
-drop policy if exists "staff_members_insert_own_or_admin" on public.staff_members;
-create policy "staff_members_insert_own_or_admin" on public.staff_members
-  for insert to authenticated
-  with check (created_by = auth.uid() or public.is_admin());
+drop policy if exists "employees_insert_own_or_admin" on public.employees;
+create policy "employees_insert_own_or_admin" on public.employees
+  for insert to authenticated with check (created_by = auth.uid() or public.is_admin());
 
-drop policy if exists "staff_members_update_by_role" on public.staff_members;
-create policy "staff_members_update_by_role" on public.staff_members
+drop policy if exists "employees_update_by_role" on public.employees;
+create policy "employees_update_by_role" on public.employees
   for update to authenticated
   using (created_by = auth.uid() or public.is_admin())
   with check (created_by = auth.uid() or public.is_admin());
 
-drop policy if exists "staff_members_delete_admin" on public.staff_members;
-create policy "staff_members_delete_admin" on public.staff_members
+drop policy if exists "employees_delete_admin" on public.employees;
+create policy "employees_delete_admin" on public.employees
   for delete to authenticated using (public.is_admin());
 
--- Salary payments (installments: staff take salary in parts on different days)
+-- Salary payments (installments: employees receive salary in parts on different days)
 create table if not exists public.salary_payments (
   id uuid primary key default uuid_generate_v4(),
-  staff_member_id uuid not null references public.staff_members (id) on delete restrict,
+  employee_id uuid not null references public.employees (id) on delete restrict,
   date date not null,
   amount numeric(14,2) not null check (amount > 0),
   note text check (char_length(note) <= 200),
@@ -572,10 +542,10 @@ create table if not exists public.salary_payments (
   created_at timestamp with time zone default timezone('utc'::text, now())
 );
 
-create index if not exists salary_payments_staff_date_idx on public.salary_payments (staff_member_id, date desc);
+create index if not exists salary_payments_employee_date_idx on public.salary_payments (employee_id, date desc);
 create index if not exists salary_payments_date_idx on public.salary_payments (date desc);
 
-comment on table public.salary_payments is 'Installment salary payments to staff. One row per payment (e.g. 2000 today, 3000 next week).';
+comment on table public.salary_payments is 'Installment salary payments to employees. One row per payment (e.g. 2000 today, 3000 next week).';
 
 alter table public.salary_payments enable row level security;
 
@@ -597,10 +567,10 @@ drop policy if exists "salary_payments_delete_admin" on public.salary_payments;
 create policy "salary_payments_delete_admin" on public.salary_payments
   for delete to authenticated using (public.is_admin());
 
--- Staff attendance (one row per staff_member per date: present/absent/half_day/leave, optional check-in/out)
-create table if not exists public.staff_attendance (
+-- Employee attendance (one row per employee per date: present/absent/half_day/leave, optional check-in/out)
+create table if not exists public.employee_attendance (
   id uuid primary key default uuid_generate_v4(),
-  staff_member_id uuid not null references public.staff_members (id) on delete restrict,
+  employee_id uuid not null references public.employees (id) on delete restrict,
   date date not null,
   status text not null check (status in ('present', 'absent', 'half_day', 'leave')),
   check_in time,
@@ -609,32 +579,32 @@ create table if not exists public.staff_attendance (
   created_by uuid references auth.users (id) on delete set null,
   created_at timestamp with time zone default timezone('utc'::text, now()),
   updated_at timestamp with time zone default timezone('utc'::text, now()),
-  unique (staff_member_id, date)
+  unique (employee_id, date)
 );
 
-create index if not exists staff_attendance_date_idx on public.staff_attendance (date desc);
-create index if not exists staff_attendance_staff_date_idx on public.staff_attendance (staff_member_id, date desc);
+create index if not exists employee_attendance_date_idx on public.employee_attendance (date desc);
+create index if not exists employee_attendance_employee_date_idx on public.employee_attendance (employee_id, date desc);
 
-comment on table public.staff_attendance is 'Daily attendance for staff members (present/absent/half_day/leave with optional check-in/out times).';
+comment on table public.employee_attendance is 'Daily attendance for employees (present/absent/half_day/leave with optional check-in/out).';
 
-alter table public.staff_attendance enable row level security;
+alter table public.employee_attendance enable row level security;
 
-drop policy if exists "staff_attendance_select_authenticated" on public.staff_attendance;
-create policy "staff_attendance_select_authenticated" on public.staff_attendance
+drop policy if exists "employee_attendance_select_authenticated" on public.employee_attendance;
+create policy "employee_attendance_select_authenticated" on public.employee_attendance
   for select to authenticated using (true);
 
-drop policy if exists "staff_attendance_insert_own" on public.staff_attendance;
-create policy "staff_attendance_insert_own" on public.staff_attendance
+drop policy if exists "employee_attendance_insert_own" on public.employee_attendance;
+create policy "employee_attendance_insert_own" on public.employee_attendance
   for insert to authenticated with check (created_by = auth.uid());
 
-drop policy if exists "staff_attendance_update_own" on public.staff_attendance;
-create policy "staff_attendance_update_own" on public.staff_attendance
+drop policy if exists "employee_attendance_update_own" on public.employee_attendance;
+create policy "employee_attendance_update_own" on public.employee_attendance
   for update to authenticated
   using (created_by = auth.uid() or public.is_admin())
   with check (created_by = auth.uid() or public.is_admin());
 
-drop policy if exists "staff_attendance_delete_admin" on public.staff_attendance;
-create policy "staff_attendance_delete_admin" on public.staff_attendance
+drop policy if exists "employee_attendance_delete_admin" on public.employee_attendance;
+create policy "employee_attendance_delete_admin" on public.employee_attendance
   for delete to authenticated using (public.is_admin());
 
 -- Credit customers ledger
@@ -751,17 +721,32 @@ create table if not exists public.day_closing (
   night_cash numeric(14,2) not null default 0 check (night_cash >= 0),
   phone_pay numeric(14,2) not null default 0 check (phone_pay >= 0),
   short_today numeric(14,2),
+  total_sale numeric(14,2),
+  collection numeric(14,2),
+  short_previous numeric(14,2),
+  credit_today numeric(14,2),
+  expenses_today numeric(14,2),
+  closing_reference text,
+  remarks text,
   created_by uuid references auth.users (id) on delete set null,
   created_at timestamp with time zone default timezone('utc'::text, now()),
   updated_at timestamp with time zone default timezone('utc'::text, now())
 );
 
 create index if not exists day_closing_date_idx on public.day_closing (date desc);
+create unique index if not exists day_closing_closing_reference_idx on public.day_closing (closing_reference) where closing_reference is not null;
 
-comment on table public.day_closing is 'Daily cash closing: night cash (hard cash), phone pay (UPI). short_today computed from formula and stored for next day short_previous.';
+comment on table public.day_closing is 'Daily closing statement: full snapshot for accounting and future reference. One row per date.';
 comment on column public.day_closing.night_cash is 'Hard cash counted at day end.';
 comment on column public.day_closing.phone_pay is 'Money received through PhonePe/UPI.';
-comment on column public.day_closing.short_today is 'Computed: (total_sale + collection + short_previous) - (night_cash + phone_pay + credit + expenses). Stored for next day short_previous.';
+comment on column public.day_closing.short_today is 'Computed short; stored for next day short_previous.';
+comment on column public.day_closing.total_sale is 'Total sale (₹) at closing – snapshot for accounting.';
+comment on column public.day_closing.collection is 'Collection from credit (₹) at closing – snapshot.';
+comment on column public.day_closing.short_previous is 'Short carried from previous day (₹) – snapshot.';
+comment on column public.day_closing.credit_today is 'New credit (₹) that day – snapshot.';
+comment on column public.day_closing.expenses_today is 'Expenses (₹) that day – snapshot.';
+comment on column public.day_closing.closing_reference is 'Unique reference for accounting (e.g. DC-2026-00001).';
+comment on column public.day_closing.remarks is 'Optional remarks at closing.';
 
 alter table public.day_closing enable row level security;
 
@@ -796,7 +781,7 @@ create trigger day_closing_updated_at_trigger
   before update on public.day_closing
   for each row execute function public.day_closing_updated_at();
 
--- RPC: Get day closing breakdown (for UI preview; does not save)
+-- RPC: Get day closing breakdown; when already_saved returns stored snapshot (for accounting)
 create or replace function public.get_day_closing_breakdown(p_date date)
 returns jsonb
 language plpgsql
@@ -817,6 +802,29 @@ declare
   v_existing record;
   v_already_saved boolean := false;
 begin
+  select total_sale, collection, short_previous, credit_today, expenses_today,
+         night_cash, phone_pay, short_today, closing_reference, remarks
+  into v_existing
+  from public.day_closing where date = p_date limit 1;
+  v_already_saved := found;
+
+  if v_already_saved and v_existing.total_sale is not null then
+    return jsonb_build_object(
+      'date', p_date,
+      'total_sale', v_existing.total_sale,
+      'collection', v_existing.collection,
+      'short_previous', v_existing.short_previous,
+      'credit_today', v_existing.credit_today,
+      'expenses_today', v_existing.expenses_today,
+      'night_cash', v_existing.night_cash,
+      'phone_pay', v_existing.phone_pay,
+      'short_today', v_existing.short_today,
+      'closing_reference', v_existing.closing_reference,
+      'remarks', v_existing.remarks,
+      'already_saved', true
+    );
+  end if;
+
   for v_row in
     select product, total_sales, testing, petrol_rate, diesel_rate
     from public.dsr where date = p_date
@@ -840,15 +848,27 @@ begin
   v_short_previous := coalesce(v_short_previous, 0);
 
   select coalesce(sum(amount_due), 0) into v_credit_today
-  from public.credit_customers
-  where date = p_date;
+  from public.credit_customers where date = p_date;
 
   select coalesce(sum(amount), 0) into v_expenses_today
   from public.expenses where date = p_date;
 
-  select night_cash, phone_pay, short_today into v_existing
-  from public.day_closing where date = p_date limit 1;
-  v_already_saved := found;
+  if v_already_saved then
+    return jsonb_build_object(
+      'date', p_date,
+      'total_sale', v_total_sale,
+      'collection', v_collection,
+      'short_previous', v_short_previous,
+      'credit_today', v_credit_today,
+      'expenses_today', v_expenses_today,
+      'night_cash', v_existing.night_cash,
+      'phone_pay', v_existing.phone_pay,
+      'short_today', v_existing.short_today,
+      'closing_reference', v_existing.closing_reference,
+      'remarks', v_existing.remarks,
+      'already_saved', true
+    );
+  end if;
 
   return jsonb_build_object(
     'date', p_date,
@@ -857,20 +877,23 @@ begin
     'short_previous', v_short_previous,
     'credit_today', v_credit_today,
     'expenses_today', v_expenses_today,
-    'night_cash', case when v_existing.night_cash is not null then v_existing.night_cash else null end,
-    'phone_pay', case when v_existing.phone_pay is not null then v_existing.phone_pay else null end,
-    'short_today', v_existing.short_today,
-    'already_saved', v_already_saved
+    'night_cash', null,
+    'phone_pay', null,
+    'short_today', null,
+    'closing_reference', null,
+    'remarks', null,
+    'already_saved', false
   );
 end;
 $$;
-comment on function public.get_day_closing_breakdown(date) is 'Returns day closing formula components for UI preview. Does not save. already_saved=true when day closing exists for p_date.';
+comment on function public.get_day_closing_breakdown(date) is 'Returns day closing components. When already_saved with snapshot, returns stored values for accounting.';
 
--- RPC: Save day closing and compute short_today server-side (foolproof formula)
+-- RPC: Save day closing with full statement snapshot and accounting reference
 create or replace function public.save_day_closing(
   p_date date,
   p_night_cash numeric,
-  p_phone_pay numeric
+  p_phone_pay numeric,
+  p_remarks text default null
 )
 returns jsonb
 language plpgsql
@@ -888,6 +911,8 @@ declare
   v_petrol_rate numeric;
   v_diesel_rate numeric;
   v_row record;
+  v_ref text;
+  v_seq bigint;
 begin
   if p_night_cash is null or p_night_cash < 0 then
     raise exception 'night_cash must be >= 0';
@@ -923,8 +948,7 @@ begin
   v_short_previous := coalesce(v_short_previous, 0);
 
   select coalesce(sum(amount_due), 0) into v_credit_today
-  from public.credit_customers
-  where date = p_date;
+  from public.credit_customers where date = p_date;
 
   select coalesce(sum(amount), 0) into v_expenses_today
   from public.expenses where date = p_date;
@@ -932,8 +956,25 @@ begin
   v_short_today := (v_total_sale + v_collection + v_short_previous)
     - (p_night_cash + p_phone_pay + v_credit_today + v_expenses_today);
 
-  insert into public.day_closing (date, night_cash, phone_pay, short_today, created_by)
-  values (p_date, p_night_cash, p_phone_pay, v_short_today, auth.uid());
+  select coalesce(max(
+    nullif(regexp_replace(closing_reference, '^DC-[0-9]+-([0-9]+)$', '\1'), '')::bigint
+  ), 0) + 1 into v_seq
+  from public.day_closing
+  where extract(year from date) = extract(year from p_date)
+    and closing_reference is not null
+    and closing_reference ~ '^DC-[0-9]+-[0-9]+$';
+  v_ref := 'DC-' || to_char(p_date, 'YYYY') || '-' || lpad(v_seq::text, 5, '0');
+
+  insert into public.day_closing (
+    date, night_cash, phone_pay, short_today,
+    total_sale, collection, short_previous, credit_today, expenses_today,
+    closing_reference, remarks, created_by
+  )
+  values (
+    p_date, p_night_cash, p_phone_pay, v_short_today,
+    v_total_sale, v_collection, v_short_previous, v_credit_today, v_expenses_today,
+    v_ref, nullif(trim(p_remarks), ''), auth.uid()
+  );
 
   return jsonb_build_object(
     'date', p_date,
@@ -944,11 +985,13 @@ begin
     'phone_pay', p_phone_pay,
     'credit_today', v_credit_today,
     'expenses_today', v_expenses_today,
-    'short_today', v_short_today
+    'short_today', v_short_today,
+    'closing_reference', v_ref,
+    'remarks', nullif(trim(p_remarks), '')
   );
 end;
 $$;
-comment on function public.save_day_closing(date, numeric, numeric) is 'Save day closing (night_cash, phone_pay) and compute short_today server-side. One entry per date; duplicate save raises.';
+comment on function public.save_day_closing(date, numeric, numeric, text) is 'Save day closing with full statement snapshot and accounting reference. One entry per date; duplicate save raises.';
 
 -- RPC: Record credit payment (collection) and update customer balance
 create or replace function public.record_credit_payment(
@@ -1028,10 +1071,11 @@ $$;
 
 comment on function public.audit_trigger_fn() is 'Generic trigger function for audit logging.';
 
--- Audit triggers for sensitive tables (staff: full trail; financial: full trail)
-drop trigger if exists audit_staff_trigger on public.staff;
-create trigger audit_staff_trigger
-  after insert or update or delete on public.staff
+-- Audit triggers for sensitive tables (users: full trail; financial: full trail)
+drop trigger if exists audit_staff_trigger on public.users;
+drop trigger if exists audit_users_trigger on public.users;
+create trigger audit_users_trigger
+  after insert or update or delete on public.users
   for each row execute function public.audit_trigger_fn();
 
 -- DSR: full audit (insert, update, delete) - who changed what and when
@@ -1063,9 +1107,10 @@ create trigger audit_credit_trigger
   for each row execute function public.audit_trigger_fn();
 
 -- Staff members: full audit
-drop trigger if exists audit_staff_members_trigger on public.staff_members;
-create trigger audit_staff_members_trigger
-  after insert or update or delete on public.staff_members
+drop trigger if exists audit_staff_members_trigger on public.employees;
+drop trigger if exists audit_employees_trigger on public.employees;
+create trigger audit_employees_trigger
+  after insert or update or delete on public.employees
   for each row execute function public.audit_trigger_fn();
 
 -- Salary payments: full audit
@@ -1075,9 +1120,10 @@ create trigger audit_salary_payments_trigger
   for each row execute function public.audit_trigger_fn();
 
 -- Staff attendance: full audit
-drop trigger if exists audit_staff_attendance_trigger on public.staff_attendance;
-create trigger audit_staff_attendance_trigger
-  after insert or update or delete on public.staff_attendance
+drop trigger if exists audit_staff_attendance_trigger on public.employee_attendance;
+drop trigger if exists audit_employee_attendance_trigger on public.employee_attendance;
+create trigger audit_employee_attendance_trigger
+  after insert or update or delete on public.employee_attendance
   for each row execute function public.audit_trigger_fn();
 
 -- Credit payments: full audit
