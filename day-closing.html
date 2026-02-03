@@ -108,6 +108,11 @@
               </div>
             </dl>
           </div>
+          <div class="form-field">
+            <label for="dc-remarks">Remarks (optional)</label>
+            <input id="dc-remarks" name="remarks" type="text" placeholder="e.g. Cash verified, bank deposit pending" maxlength="300" />
+          </div>
+          <p id="dc-reference-line" class="muted hidden"></p>
           <div class="form-actions">
             <button type="button" id="day-closing-refresh">Refresh</button>
             <button type="submit" id="day-closing-save">Save day closing</button>
@@ -116,6 +121,40 @@
           <p id="day-closing-success" class="success hidden">Day closing saved. Short computed and stored for next day.</p>
           <p id="day-closing-error" class="error hidden" role="alert"></p>
         </form>
+      </section>
+
+      <section class="card">
+        <h2>Day closing register</h2>
+        <p class="muted">Saved closing statements for accounting and future reference. Use date range to filter.</p>
+        <div class="form-inline margin-bottom">
+          <label for="dc-register-start">From</label>
+          <input id="dc-register-start" type="date" aria-label="From date" />
+          <label for="dc-register-end">To</label>
+          <input id="dc-register-end" type="date" aria-label="To date" />
+          <button type="button" id="dc-register-load">Load</button>
+        </div>
+        <div class="table-wrap">
+          <table class="day-closing-register-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Reference</th>
+                <th>Total sale</th>
+                <th>Collection</th>
+                <th>Short prev</th>
+                <th>Credit</th>
+                <th>Expenses</th>
+                <th>Night cash</th>
+                <th>Phone pay</th>
+                <th>Short</th>
+                <th>Remarks</th>
+              </tr>
+            </thead>
+            <tbody id="dc-register-body">
+              <tr><td colspan="11" class="muted">Select date range and click Load.</td></tr>
+            </tbody>
+          </table>
+        </div>
       </section>
     </main>
   </body>
