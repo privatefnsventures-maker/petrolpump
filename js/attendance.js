@@ -65,7 +65,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   async function loadStaffMembers() {
     const { data, error } = await supabaseClient
-      .from("staff_members")
+      .from("employees")
       .select("id, name, role_display, display_order")
       .eq("is_active", true)
       .order("display_order", { ascending: true })
@@ -81,8 +81,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   async function loadAttendanceForDate(date) {
     const { data, error } = await supabaseClient
-      .from("staff_attendance")
-      .select("id, staff_member_id, date, status, check_in, check_out, note")
+      .from("employee_attendance")
+      .select("id, employee_id, date, status, check_in, check_out, note")
       .eq("date", date);
 
     if (error) {
@@ -91,7 +91,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     const list = data ?? [];
     const map = new Map();
-    list.forEach((r) => map.set(r.staff_member_id, r));
+    list.forEach((r) => map.set(r.employee_id, r));
     attendanceByDate = map;
     return list;
   }
@@ -197,7 +197,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const note = noteEl?.value?.trim() || null;
 
     const payload = {
-      staff_member_id: staffId,
+      employee_id: staffId,
       date,
       status,
       check_in: checkIn,
@@ -210,12 +210,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     let error;
     if (recordId) {
       const { error: updateErr } = await supabaseClient
-        .from("staff_attendance")
+        .from("employee_attendance")
         .update(payload)
         .eq("id", recordId);
       error = updateErr;
     } else {
-      const { error: insertErr } = await supabaseClient.from("staff_attendance").insert(payload);
+      const { error: insertErr } = await supabaseClient.from("employee_attendance").insert(payload);
       error = insertErr;
     }
 
@@ -252,7 +252,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       const note = noteEl?.value?.trim() || null;
 
       const payload = {
-        staff_member_id: s.id,
+        employee_id: s.id,
         date,
         status,
         check_in: checkIn,
@@ -264,11 +264,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       const existing = attendanceByDate.get(s.id);
       if (existing) {
-        const { error } = await supabaseClient.from("staff_attendance").update(payload).eq("id", existing.id);
+        const { error } = await supabaseClient.from("employee_attendance").update(payload).eq("id", existing.id);
         if (error) errMsg = AppError.getUserMessage(error);
         else saved++;
       } else {
-        const { error } = await supabaseClient.from("staff_attendance").insert(payload);
+        const { error } = await supabaseClient.from("employee_attendance").insert(payload);
         if (error) errMsg = AppError.getUserMessage(error);
         else saved++;
       }
@@ -296,8 +296,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     const { start, end } = getMonthStartEnd(year, month);
 
     const { data, error } = await supabaseClient
-      .from("staff_attendance")
-      .select("id, staff_member_id, date, status, check_in, check_out, note")
+      .from("employee_attendance")
+      .select("id, employee_id, date, status, check_in, check_out, note")
       .gte("date", start)
       .lte("date", end)
       .order("date", { ascending: false });
@@ -318,7 +318,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     historyBody.innerHTML = list
       .map((r) => {
-        const staff = staffById.get(r.staff_member_id);
+        const staff = staffById.get(r.employee_id);
         const name = staff ? escapeHtml(staff.name) : "—";
         return `
           <tr>
@@ -340,8 +340,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     const { start, end } = getMonthStartEnd(year, month);
 
     supabaseClient
-      .from("staff_attendance")
-      .select("staff_member_id, date, status, check_in, check_out, note")
+      .from("employee_attendance")
+      .select("employee_id, date, status, check_in, check_out, note")
       .gte("date", start)
       .lte("date", end)
       .order("date", { ascending: false })
@@ -354,7 +354,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const staffById = new Map(staffList.map((s) => [s.id, s]));
         const headers = ["Date", "Staff", "Status", "Check-in", "Check-out", "Note"];
         const rows = list.map((r) => {
-          const staff = staffById.get(r.staff_member_id);
+          const staff = staffById.get(r.employee_id);
           const name = staff ? staff.name : "—";
           return [
             r.date,
