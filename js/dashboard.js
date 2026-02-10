@@ -175,6 +175,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     operatorRoleEl.textContent = `(${roleLabel})`;
   }
 
+  // Ensure open credit is never served from cache on dashboard load
+  if (typeof AppCache !== "undefined" && AppCache) {
+    AppCache.invalidateByType("credit_summary");
+  }
+
   const snapshotDateInput = document.getElementById("snapshot-date");
   const petrolRateInput = document.getElementById("snapshot-petrol-rate");
   const dieselRateInput = document.getElementById("snapshot-diesel-rate");
@@ -703,18 +708,17 @@ function updateTotalSaleRupees() {
 async function loadCreditSummary(dateStr) {
   const creditTotal = document.getElementById("credit-total");
   const selectedDate = dateStr || new Date().toISOString().slice(0, 10);
-  const endOfDayISO = `${selectedDate}T23:59:59.999Z`;
   const cacheKey = getCreditSummaryCacheKey(selectedDate);
 
   const fetchFn = async () => {
-    // Filter in database: last_payment <= date OR (last_payment is null AND created_at <= endOfDay)
+    // Filter: last_payment <= selectedDate OR (last_payment is null AND credit date <= selectedDate)
     const { data, error } = await supabaseClient
       .from("credit_customers")
       .select("amount_due")
       .gt("amount_due", 0)
       .or(
         `and(last_payment.not.is.null,last_payment.lte.${selectedDate}),` +
-        `and(last_payment.is.null,created_at.lte.${endOfDayISO})`
+        `and(last_payment.is.null,date.lte.${selectedDate})`
       );
 
     if (error) {
@@ -724,19 +728,11 @@ async function loadCreditSummary(dateStr) {
     return data ?? [];
   };
 
-  // Callback to update UI when fresh data arrives
-  const onUpdate = (freshData) => {
-    renderCreditSummary(freshData, creditTotal);
-  };
-
-  // Try to get cached data with SWR pattern
-  let data;
-  if (AppCache) {
-    data = await AppCache.getWithSWR(cacheKey, fetchFn, "credit_summary", onUpdate);
-  } else {
-    data = await fetchFn();
+  // Always fetch fresh data so open credit reflects latest value (no cache-first)
+  let data = await fetchFn();
+  if (AppCache && data !== null && data !== undefined) {
+    AppCache.set(cacheKey, data, "credit_summary");
   }
-
   renderCreditSummary(data, creditTotal);
 }
 
@@ -1642,6 +1638,28 @@ window.addEventListener("storage", (e) => {
   const dateInput = document.getElementById("snapshot-date");
   const date = dateInput?.value || (typeof getLocalDateString === "function" ? getLocalDateString() : new Date().toISOString().slice(0, 10));
   loadCreditSummary(date);
+});
+
+// Refetch open credit when user returns to dashboard tab or page (e.g. from Credit page)
+function refreshCreditSummaryOnVisible() {
+  const dateInput = document.getElementById("snapshot-date");
+  if (!dateInput) return;
+  const date = dateInput.value || new Date().toISOString().slice(0, 10);
+  loadCreditSummary(date).then(() => {
+    const creditTotal = document.getElementById("credit-total");
+    const glanceCredit = document.getElementById("glance-credit");
+    if (glanceCredit && creditTotal) glanceCredit.textContent = creditTotal.textContent;
+  });
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && document.getElementById("snapshot-card")) {
+    refreshCreditSummaryOnVisible();
+  }
+});
+window.addEventListener("pageshow", (e) => {
+  if (e.persisted && document.getElementById("snapshot-card")) {
+    refreshCreditSummaryOnVisible();
+  }
 });
 
 function sumByProduct(rows, product, valueFn) {
