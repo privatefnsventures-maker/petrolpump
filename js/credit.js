@@ -16,13 +16,14 @@ function formatDisplayDate(dateStr) {
   });
 }
 
-// Pagination state
+// Pagination state (aggregated ledger: one row per customer name)
 const PAGE_SIZE = 25;
 let creditPagination = {
   offset: 0,
   hasMore: true,
   totalCount: 0,
   isLoading: false,
+  ledgerData: [], // Full aggregated list for client-side pagination
 };
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -204,11 +205,12 @@ async function loadCreditLedger(reset = false) {
   if (creditPagination.isLoading) return;
   creditPagination.isLoading = true;
 
-  // Reset pagination state if needed
+  // Reset pagination state if needed (clear cached ledger so we refetch)
   if (reset) {
     creditPagination.offset = 0;
     creditPagination.hasMore = true;
     creditPagination.totalCount = 0;
+    creditPagination.ledgerData = [];
     tbody.innerHTML = "<tr><td colspan='7' class='muted'>Fetching credit ledger…</td></tr>";
   }
 
@@ -219,55 +221,41 @@ async function loadCreditLedger(reset = false) {
   }
 
   try {
-    // Fetch total count (only on reset/initial load)
-    if (reset) {
-      const { count, error: countError } = await supabaseClient
-        .from("credit_customers")
-        .select("*", { count: "exact", head: true });
-      
-      if (!countError) {
-        creditPagination.totalCount = count || 0;
-      }
-    }
+    // On reset: fetch full aggregated ledger (one row per customer name)
+    if (reset || creditPagination.ledgerData.length === 0) {
+      const { data: ledgerData, error } = await supabaseClient.rpc("get_credit_ledger_aggregated");
 
-    // Fetch data with pagination using range
-    const { data, error } = await supabaseClient
-      .from("credit_customers")
-      .select("id, customer_name, vehicle_no, amount_due, date, last_payment, notes")
-      .order("created_at", { ascending: false })
-      .range(creditPagination.offset, creditPagination.offset + PAGE_SIZE - 1);
-
-    if (error) {
-      if (reset) {
+      if (error) {
         tbody.innerHTML = `<tr><td colspan="7" class="error">${escapeHtml(AppError.getUserMessage(error))}</td></tr>`;
+        AppError.report(error, { context: "loadCreditLedger" });
+        creditPagination.isLoading = false;
+        updatePaginationUI();
+        return;
       }
-      AppError.report(error, { context: "loadCreditLedger" });
-      creditPagination.isLoading = false;
-      updatePaginationUI();
-      return;
-    }
 
-    // Update pagination state
-    const fetchedCount = data?.length || 0;
-    creditPagination.offset += fetchedCount;
-    creditPagination.hasMore = fetchedCount === PAGE_SIZE;
+      creditPagination.ledgerData = ledgerData ?? [];
+      creditPagination.totalCount = creditPagination.ledgerData.length;
+      creditPagination.hasMore = creditPagination.totalCount > PAGE_SIZE;
+    }
 
     // Handle empty data
-    if (reset && !fetchedCount) {
+    if (creditPagination.ledgerData.length === 0) {
       tbody.innerHTML = "<tr><td colspan='7'><div class='empty-state'><p>No credit customers recorded yet.</p><p class='empty-cta'><a href='#credit-form'>Record credit sale above</a>.</p></div></td></tr>";
       creditPagination.isLoading = false;
       updatePaginationUI();
       return;
     }
 
-    // Clear loading message on initial load
+    const sliceStart = reset ? 0 : creditPagination.offset;
+    const sliceEnd = sliceStart + PAGE_SIZE;
+    const rowsToShow = creditPagination.ledgerData.slice(sliceStart, sliceEnd);
+
     if (reset) {
       tbody.innerHTML = "";
     }
 
     const todayStr = typeof getLocalDateString === "function" ? getLocalDateString() : new Date().toISOString().slice(0, 10);
-    // Append rows
-    data.forEach((row) => {
+    rowsToShow.forEach((row) => {
       const tr = document.createElement("tr");
       const actionHtml = Number(row.amount_due) > 0
         ? `<div class="settle-inline">
@@ -298,6 +286,9 @@ async function loadCreditLedger(reset = false) {
       `;
       tbody.appendChild(tr);
     });
+
+    creditPagination.offset = reset ? rowsToShow.length : creditPagination.offset + rowsToShow.length;
+    creditPagination.hasMore = creditPagination.offset < creditPagination.totalCount;
 
   } catch (err) {
     if (reset) {
@@ -455,7 +446,7 @@ document.addEventListener("click", async (e) => {
     msg.textContent = "";
   }, 3500);
 
-  // Invalidate cache so dashboard (and other tabs) show updated credit immediately
+  // Invalidate cache and reload ledger so aggregated totals are correct
   if (typeof AppCache !== "undefined" && AppCache) {
     AppCache.invalidateByType("credit_summary");
     AppCache.invalidateByType("recent_activity");
@@ -465,6 +456,7 @@ document.addEventListener("click", async (e) => {
   } catch (e) {
     /* ignore */
   }
+  loadCreditLedger(true);
 });
 
 // Handle delete button clicks for settled entries
@@ -511,13 +503,12 @@ document.addEventListener("click", async (e) => {
     updatePaginationUI();
   }
 
-  // Remove the row from the table
+  // Remove the row from the table and reload ledger for correct aggregation
   if (tr) {
     tr.style.transition = "opacity 0.3s ease";
     tr.style.opacity = "0";
     setTimeout(() => {
       tr.remove();
-      // Check if table is now empty
       const tbody = document.getElementById("credit-table-body");
       if (tbody && tbody.querySelectorAll("tr").length === 0) {
         tbody.innerHTML = "<tr><td colspan='7' class='muted'>No credit customers recorded yet.</td></tr>";
@@ -527,7 +518,6 @@ document.addEventListener("click", async (e) => {
     }, 300);
   }
 
-  // Invalidate cache so dashboard (and other tabs) show updated credit immediately
   if (typeof AppCache !== "undefined" && AppCache) {
     AppCache.invalidateByType("credit_summary");
     AppCache.invalidateByType("recent_activity");
@@ -537,6 +527,7 @@ document.addEventListener("click", async (e) => {
   } catch (e) {
     /* ignore */
   }
+  loadCreditLedger(true);
 });
 
 // simple HTML escape for attribute injection safety

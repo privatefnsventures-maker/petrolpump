@@ -1254,20 +1254,73 @@ begin
     from public.credit_payments
     where date <= p_date
     group by credit_customer_id
+  ),
+  per_customer as (
+    select c.customer_name,
+           c.vehicle_no,
+           (coalesce(b.credit_tot, 0) - coalesce(p.payment_tot, 0))::numeric as amt,
+           p.last_pay_date as last_pay,
+           b.min_txn_date as min_txn
+    from public.credit_customers c
+    left join bal b on b.credit_customer_id = c.id
+    left join pay p on p.credit_customer_id = c.id
+    where coalesce(b.credit_tot, 0) - coalesce(p.payment_tot, 0) > 0
   )
-  select c.customer_name::text,
-         c.vehicle_no::text,
-         (coalesce(b.credit_tot, 0) - coalesce(p.payment_tot, 0))::numeric as amount_due_as_of,
-         p.last_pay_date as last_payment_date,
-         b.min_txn_date as sale_date
-  from public.credit_customers c
-  left join bal b on b.credit_customer_id = c.id
-  left join pay p on p.credit_customer_id = c.id
-  where coalesce(b.credit_tot, 0) - coalesce(p.payment_tot, 0) > 0
+  select (max(pc.customer_name))::text as customer_name,
+         (max(pc.vehicle_no))::text as vehicle_no,
+         sum(pc.amt)::numeric as amount_due_as_of,
+         max(pc.last_pay) as last_payment_date,
+         min(pc.min_txn) as sale_date
+  from per_customer pc
+  group by lower(trim(pc.customer_name))
   order by amount_due_as_of desc;
 end;
 $$;
-comment on function public.get_outstanding_credit_list_as_of(date) is 'Customers with outstanding balance as of date D; amount_due_as_of and last_payment_date are as of D.';
+comment on function public.get_outstanding_credit_list_as_of(date) is 'Customers with outstanding balance as of date D; one row per customer (grouped by name). amount_due_as_of and last_payment_date are as of D.';
+
+-- Credit ledger aggregated by customer name (one row per customer; primary id for Settle/Delete)
+create or replace function public.get_credit_ledger_aggregated()
+returns table (
+  id uuid,
+  customer_name text,
+  vehicle_no text,
+  amount_due numeric,
+  date date,
+  last_payment date,
+  notes text
+)
+language plpgsql security definer stable
+as $$
+begin
+  return query
+  with ranked as (
+    select c.id, c.customer_name, c.vehicle_no, c.amount_due, c.date, c.last_payment, c.notes,
+           row_number() over (partition by lower(trim(c.customer_name)) order by c.amount_due desc nulls last, c.created_at desc) as rn
+    from public.credit_customers c
+  ),
+  agg as (
+    select lower(trim(r.customer_name)) as name_key,
+           sum(r.amount_due) as total_due,
+           min(r.date) as min_date,
+           max(r.last_payment) as max_last_pay,
+           (array_agg(r.notes order by r.amount_due desc nulls last))[1] as first_notes
+    from ranked r
+    group by lower(trim(r.customer_name))
+  )
+  select r.id,
+         r.customer_name::text as customer_name,
+         r.vehicle_no::text as vehicle_no,
+         a.total_due::numeric as amount_due,
+         a.min_date as date,
+         a.max_last_pay as last_payment,
+         a.first_notes::text as notes
+  from ranked r
+  join agg a on lower(trim(r.customer_name)) = a.name_key
+  where r.rn = 1
+  order by a.total_due desc nulls last;
+end;
+$$;
+comment on function public.get_credit_ledger_aggregated() is 'Credit ledger with one row per customer (grouped by name). id is primary customer row for Settle/Delete.';
 
 -- ============================================================================
 -- AUDIT TRIGGERS (automatic logging of sensitive operations)
