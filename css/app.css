@@ -47,16 +47,42 @@ tbody tr:hover {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  min-width: min-content;
+}
+
+.settle-inline .settle-date-label {
+  font-size: 0.8rem;
+  color: var(--muted, #64748b);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.settle-inline .settle-date {
+  width: 9.5rem;
+  min-width: 9.5rem;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.settle-inline .settle-mode {
+  width: 5rem;
+  min-width: 5rem;
+  font-size: 0.85rem;
+  padding: 0.35rem 0.5rem;
+  flex-shrink: 0;
 }
 
 .settle-inline .settle-amount {
   width: 80px;
+  min-width: 80px;
+  flex-shrink: 0;
 }
 
 .settle-inline .settle-confirm {
   padding: 0.4rem 0.75rem;
   font-size: 0.85rem;
+  flex-shrink: 0;
 }
 
 .settle-inline .delete-entry {
@@ -72,6 +98,52 @@ tbody tr:hover {
 
 .settle-inline .settle-msg {
   font-size: 0.85rem;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* Credit module: intro and date glossary */
+.credit-intro {
+  padding-bottom: var(--space-4);
+}
+.credit-date-glossary {
+  margin-top: var(--space-4);
+  padding: var(--space-3);
+  background: var(--surface, #f8fafc);
+  border-radius: var(--radius, 6px);
+  border: 1px solid var(--border, #e2e8f0);
+  font-size: var(--text-sm, 0.875rem);
+}
+.credit-date-glossary strong { color: var(--text, #0f172a); }
+.credit-date-glossary ul {
+  margin: 0.5rem 0 0 1.25rem;
+  padding: 0;
+}
+.credit-date-glossary li { margin-top: 0.35rem; }
+
+.field-hint {
+  display: block;
+  font-size: var(--text-sm, 0.8125rem);
+  color: var(--muted, #64748b);
+  margin-top: 0.25rem;
+}
+
+.optional-label {
+  font-weight: normal;
+  color: var(--muted, #64748b);
+}
+
+.card-head-flex {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.credit-ledger-summary {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 500;
 }
 
 /* Pagination controls */

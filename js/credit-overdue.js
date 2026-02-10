@@ -96,10 +96,10 @@ async function loadOpenCredit(dateStr, reset = false) {
   // Reset pagination state if needed or if date changed
   if (reset || overduePagination.currentDate !== dateStr) {
     overduePagination.offset = 0;
-    overduePagination.hasMore = true;
+    overduePagination.hasMore = false;
     overduePagination.totalCount = 0;
     overduePagination.currentDate = dateStr;
-    overduePagination.filteredData = [];
+    overduePagination.filteredData = []; // Force fetch in try block
     tbody.innerHTML = "<tr><td colspan='5' class='muted'>Loading…</td></tr>";
   }
 
@@ -109,119 +109,71 @@ async function loadOpenCredit(dateStr, reset = false) {
     loadMoreBtn.textContent = "Loading…";
   }
 
-  // Same as dashboard: last_payment <= dateStr OR (last_payment is null AND credit date <= dateStr)
-  const outstandingAsOfFilter =
-    `and(last_payment.not.is.null,last_payment.lte.${dateStr}),` +
-    `and(last_payment.is.null,date.lte.${dateStr})`;
-
   try {
-    // Fetch total count of outstanding credits as of dateStr (only on reset)
-    if (reset || overduePagination.currentDate !== dateStr) {
-      const { count, error: countError } = await supabaseClient
-        .from("credit_customers")
-        .select("*", { count: "exact", head: true })
-        .gt("amount_due", 0)
-        .or(outstandingAsOfFilter);
+    // On reset/date change: fetch full list (outstanding as of date = entries by txn date - payments by date)
+    if (reset || overduePagination.currentDate !== dateStr || overduePagination.filteredData.length === 0) {
+      const { data: listData, error } = await supabaseClient.rpc("get_outstanding_credit_list_as_of", {
+        p_date: dateStr,
+      });
 
-      if (!countError) {
-        overduePagination.totalCount = count || 0;
-      }
-    }
-
-    // Fetch data with pagination (filtered by outstanding as of dateStr)
-    const { data, error } = await supabaseClient
-      .from("credit_customers")
-      .select("customer_name, vehicle_no, amount_due, last_payment, date, created_at")
-      .gt("amount_due", 0)
-      .or(outstandingAsOfFilter)
-      .order("amount_due", { ascending: false })
-      .range(overduePagination.offset, overduePagination.offset + PAGE_SIZE - 1);
-
-    if (error) {
-      if (reset) {
+      if (error) {
         tbody.innerHTML = `<tr><td colspan="5" class="error">${escapeHtml(AppError.getUserMessage(error))}</td></tr>`;
         if (summary) summary.textContent = "Unable to load.";
         if (document.getElementById("credit-overdue-as-of")) {
           document.getElementById("credit-overdue-as-of").textContent = `As of ${formatDisplayDate(dateStr)}`;
         }
+        AppError.report(error, { context: "loadOpenCredit" });
+        overduePagination.isLoading = false;
+        updateOverduePaginationUI();
+        return;
       }
-      AppError.report(error, { context: "loadOpenCredit" });
-      overduePagination.isLoading = false;
-      updateOverduePaginationUI();
-      return;
+
+      overduePagination.filteredData = listData ?? [];
+      overduePagination.totalCount = overduePagination.filteredData.length;
+      overduePagination.hasMore = overduePagination.totalCount > PAGE_SIZE;
     }
 
-    // Update pagination state
-    const fetchedCount = data?.length || 0;
-    overduePagination.offset += fetchedCount;
-    overduePagination.hasMore = fetchedCount === PAGE_SIZE;
-
-    // Handle empty data on initial load
-    if (reset && !fetchedCount) {
-      tbody.innerHTML = `<tr><td colspan='5'><div class='empty-state'><p>No outstanding credits for this date.</p><p class='empty-cta'><a href='credit.html'>Record credit sale</a></p></div></td></tr>`;
-      if (summary) summary.textContent = "Total outstanding: ₹0.00 · 0 customers";
-      if (document.getElementById("credit-overdue-as-of")) {
-        document.getElementById("credit-overdue-as-of").textContent = `As of ${formatDisplayDate(dateStr)}`;
-      }
-      overduePagination.isLoading = false;
-      updateOverduePaginationUI();
-      return;
-    }
-
-    // Data is already filtered by DB (outstanding as of dateStr using last_payment or credit date)
-    const newFiltered = data ?? [];
-
-    // Add to accumulated filtered data
-    overduePagination.filteredData.push(...newFiltered);
-
-    // Handle no filtered results
-    if (overduePagination.filteredData.length === 0 && !overduePagination.hasMore) {
-      tbody.innerHTML = `<tr><td colspan='5'><div class='empty-state'><p>No outstanding credits for this date.</p><p class='empty-cta'><a href='credit.html'>Record credit sale</a></p></div></td></tr>`;
-      if (summary) summary.textContent = "Total outstanding: ₹0.00 · 0 customers";
-      if (document.getElementById("credit-overdue-as-of")) {
-        document.getElementById("credit-overdue-as-of").textContent = `As of ${formatDisplayDate(dateStr)}`;
-      }
-      overduePagination.isLoading = false;
-      updateOverduePaginationUI();
-      return;
-    }
-
-    // Update summary with filtered totals
-    const totalDue = overduePagination.filteredData.reduce(
-      (sum, row) => sum + Number(row.amount_due ?? 0), 0
-    );
     const asOfEl = document.getElementById("credit-overdue-as-of");
-    if (summary) {
-      summary.textContent = `Total outstanding: ${formatCurrency(totalDue)} · ${overduePagination.filteredData.length} customers`;
-    }
-    if (asOfEl) {
-      asOfEl.textContent = `As of ${formatDisplayDate(dateStr)}`;
+    if (asOfEl) asOfEl.textContent = `As of ${formatDisplayDate(dateStr)}`;
+
+    if (overduePagination.filteredData.length === 0) {
+      tbody.innerHTML = `<tr><td colspan='5'><div class='empty-state'><p>No outstanding credits for this date.</p><p class='empty-cta'><a href='credit.html'>Record credit sale</a></p></div></td></tr>`;
+      if (summary) summary.textContent = "Total outstanding: ₹0.00 · 0 customers";
+      overduePagination.isLoading = false;
+      updateOverduePaginationUI();
+      return;
     }
 
-    // Render table
+    const totalDue = overduePagination.filteredData.reduce(
+      (sum, row) => sum + Number(row.amount_due_as_of ?? 0),
+      0
+    );
+    if (summary) {
+      summary.textContent = `Total outstanding: ${formatCurrency(totalDue)} · ${overduePagination.totalCount} customers`;
+    }
+
+    const sliceStart = reset ? 0 : overduePagination.offset;
+    const sliceEnd = sliceStart + PAGE_SIZE;
+    const rowsToShow = overduePagination.filteredData.slice(sliceStart, sliceEnd);
+
     if (reset) {
       tbody.innerHTML = "";
     }
 
-    // Append only new filtered rows
-    newFiltered.forEach((row) => {
+    rowsToShow.forEach((row) => {
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td>${escapeHtml(row.customer_name)}</td>
         <td>${escapeHtml(row.vehicle_no ?? "—")}</td>
-        <td>${formatCurrency(row.amount_due)}</td>
-        <td>${row.last_payment ?? "—"}</td>
-        <td>${formatDate(row.created_at)}</td>
+        <td>${formatCurrency(row.amount_due_as_of)}</td>
+        <td>${formatDisplayDate(row.last_payment_date)}</td>
+        <td>${formatDisplayDate(row.sale_date)}</td>
       `;
       tbody.appendChild(tr);
     });
 
-    // If we got no filtered results but there's more data, auto-load more
-    if (newFiltered.length === 0 && overduePagination.hasMore) {
-      overduePagination.isLoading = false;
-      loadOpenCredit(dateStr, false);
-      return;
-    }
+    overduePagination.offset = reset ? rowsToShow.length : overduePagination.offset + rowsToShow.length;
+    overduePagination.hasMore = overduePagination.offset < overduePagination.totalCount;
 
   } catch (err) {
     if (reset) {
@@ -244,12 +196,12 @@ function updateOverduePaginationUI() {
   
   // Update info text
   if (paginationInfo) {
-    if (overduePagination.filteredData.length > 0) {
-      const showing = overduePagination.filteredData.length;
+    if (overduePagination.totalCount > 0) {
+      const showing = Math.min(overduePagination.offset, overduePagination.totalCount);
       if (overduePagination.hasMore) {
-        paginationInfo.textContent = `Showing ${showing} entries (more available)`;
+        paginationInfo.textContent = `Showing ${showing} of ${overduePagination.totalCount} entries`;
       } else {
-        paginationInfo.textContent = `Showing all ${showing} entries`;
+        paginationInfo.textContent = `Showing all ${overduePagination.totalCount} entries`;
       }
     } else {
       paginationInfo.textContent = "";
