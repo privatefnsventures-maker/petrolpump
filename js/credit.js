@@ -1,5 +1,21 @@
 /* global supabaseClient, requireAuth, applyRoleVisibility, formatCurrency, getLocalDateString, AppCache, AppError */
 
+/**
+ * Format YYYY-MM-DD for display (e.g. "10 Feb 2025").
+ * @param {string|null|undefined} dateStr
+ * @returns {string}
+ */
+function formatDisplayDate(dateStr) {
+  if (!dateStr) return "—";
+  const date = new Date(dateStr + "T00:00:00");
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
 // Pagination state
 const PAGE_SIZE = 25;
 let creditPagination = {
@@ -24,10 +40,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     );
   }
 
-  // Default credit date to today
-  const creditDateInput = document.getElementById("credit-date");
-  if (creditDateInput && typeof getLocalDateString === "function") {
-    creditDateInput.value = getLocalDateString();
+  // Default transaction date to today
+  const transactionDateInput = document.getElementById("credit-date");
+  if (transactionDateInput && typeof getLocalDateString === "function") {
+    transactionDateInput.value = getLocalDateString();
   }
 
   // Initialize pagination controls
@@ -82,44 +98,33 @@ async function handleCreditSubmit(event, currentUserId) {
   errorEl?.classList.add("hidden");
 
   const formData = new FormData(form);
-  const creditDate = formData.get("credit_date")?.trim() || (typeof getLocalDateString === "function" ? getLocalDateString() : new Date().toISOString().slice(0, 10));
-
+  const transactionDate = formData.get("credit_date")?.trim() || (typeof getLocalDateString === "function" ? getLocalDateString() : new Date().toISOString().slice(0, 10));
   const customerName = (formData.get("customer_name") || "").trim();
-  const amountDue = Number(formData.get("amount_due") || 0);
-  const payload = {
-    customer_name: customerName,
-    vehicle_no: formData.get("vehicle_no") || null,
-    amount_due: amountDue,
-    date: creditDate,
-    notes: formData.get("notes") || null,
-  };
-  if (currentUserId) {
-    payload.created_by = currentUserId;
+  const fuelType = (formData.get("fuel_type") || "").trim() || null;
+  const quantityRaw = Number(formData.get("quantity") || 0);
+  const quantity = quantityRaw > 0 ? quantityRaw : null;
+  const amount = Number(formData.get("amount_due") || 0);
+  const notes = (formData.get("notes") || "").trim() || null;
+  const vehicleNo = (formData.get("vehicle_no") || "").trim() || null;
+
+  if (!customerName || amount <= 0) {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Save credit entry";
+    }
+    AppError.handle(new Error("Customer and amount are required."), { target: errorEl });
+    return;
   }
 
-  // If same customer name already exists (any date), cumulate credit to that customer's row
-  const { data: existing } = await supabaseClient
-    .from("credit_customers")
-    .select("id, amount_due")
-    .ilike("customer_name", customerName)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  let error = null;
-  if (existing && existing.id) {
-    const newTotal = (Number(existing.amount_due) || 0) + amountDue;
-    const { error: updateErr } = await supabaseClient
-      .from("credit_customers")
-      .update({ amount_due: newTotal })
-      .eq("id", existing.id);
-    error = updateErr;
-  } else {
-    const { error: insertErr } = await supabaseClient
-      .from("credit_customers")
-      .insert(payload);
-    error = insertErr;
-  }
+  const { data, error } = await supabaseClient.rpc("add_credit_entry", {
+    p_customer_name: customerName,
+    p_transaction_date: transactionDate,
+    p_amount: amount,
+    p_vehicle_no: vehicleNo,
+    p_fuel_type: fuelType || undefined,
+    p_quantity: quantity ?? undefined,
+    p_notes: notes,
+  });
 
   if (error) {
     if (submitBtn) {
@@ -131,24 +136,24 @@ async function handleCreditSubmit(event, currentUserId) {
   }
 
   form.reset();
-  const creditDateInput = form.querySelector("#credit-date");
-  if (creditDateInput) {
-    creditDateInput.value = typeof getLocalDateString === "function" ? getLocalDateString() : new Date().toISOString().slice(0, 10);
+  const transactionDateInput = form.querySelector("#credit-date");
+  if (transactionDateInput) {
+    transactionDateInput.value = typeof getLocalDateString === "function" ? getLocalDateString() : new Date().toISOString().slice(0, 10);
   }
+  const fuelTypeSelect = form.querySelector("#fuel-type");
+  if (fuelTypeSelect) fuelTypeSelect.value = "";
   if (submitBtn) {
     submitBtn.disabled = false;
     submitBtn.textContent = "Save credit entry";
   }
   successEl?.classList.remove("hidden");
-  loadCreditLedger(true); // Reset pagination to show new entry at top
-  loadCustomerNames(); // Refresh dropdown so new names appear
+  loadCreditLedger(true);
+  loadCustomerNames();
 
-  // Invalidate credit-related caches so dashboard shows fresh data
   if (typeof AppCache !== "undefined" && AppCache) {
     AppCache.invalidateByType("credit_summary");
     AppCache.invalidateByType("recent_activity");
   }
-  
   try {
     localStorage.setItem("credit-updated", String(Date.now()));
   } catch (e) {
@@ -260,27 +265,34 @@ async function loadCreditLedger(reset = false) {
       tbody.innerHTML = "";
     }
 
+    const todayStr = typeof getLocalDateString === "function" ? getLocalDateString() : new Date().toISOString().slice(0, 10);
     // Append rows
     data.forEach((row) => {
       const tr = document.createElement("tr");
       const actionHtml = Number(row.amount_due) > 0
         ? `<div class="settle-inline">
-             <input type="number" min="0" step="0.01" class="settle-amount" placeholder="0.00" />
+             <label class="settle-date-label" for="settle-date-${row.id}">Settlement date</label>
+             <input type="date" class="settle-date" id="settle-date-${row.id}" value="${todayStr}" title="Business date when payment was received" aria-label="Settlement date" />
+             <select class="settle-mode" aria-label="Payment mode" title="Cash / UPI / Bank">
+               <option value="Cash">Cash</option>
+               <option value="UPI">UPI</option>
+               <option value="Bank">Bank</option>
+             </select>
+             <input type="number" min="0" step="0.01" class="settle-amount" placeholder="Amount" title="Amount received" aria-label="Amount (₹)" />
              <button class="settle-confirm" data-id="${row.id}">Settle</button>
-             <span class="settle-msg muted" aria-hidden="true"></span>
+             <span class="settle-msg muted" aria-live="polite"></span>
            </div>`
         : `<div class="settle-inline">
              <span class="muted">Cleared</span>
              <button class="delete-entry" data-id="${row.id}" title="Delete settled entry">Delete</button>
-             <span class="settle-msg muted" aria-hidden="true"></span>
            </div>`;
 
       tr.innerHTML = `
         <td>${escapeHtml(row.customer_name)}</td>
         <td>${escapeHtml(row.vehicle_no ?? "—")}</td>
         <td data-amount="${row.amount_due}">${formatCurrency(row.amount_due)}</td>
-        <td>${row.date ?? "—"}</td>
-        <td>${row.last_payment ?? "—"}</td>
+        <td>${formatDisplayDate(row.date)}</td>
+        <td>${formatDisplayDate(row.last_payment)}</td>
         <td>${escapeHtml(row.notes ?? "—")}</td>
         <td>${actionHtml}</td>
       `;
@@ -305,13 +317,22 @@ function updatePaginationUI() {
   const loadMoreBtn = document.getElementById("credit-load-more");
   const paginationInfo = document.getElementById("credit-pagination-info");
   
-  // Update info text
+  // Update info text and ledger summary
+  const summaryEl = document.getElementById("credit-ledger-summary");
   if (paginationInfo) {
     if (creditPagination.totalCount > 0) {
       const showing = Math.min(creditPagination.offset, creditPagination.totalCount);
       paginationInfo.textContent = `Showing ${showing} of ${creditPagination.totalCount} entries`;
     } else {
       paginationInfo.textContent = "";
+    }
+  }
+  if (summaryEl) {
+    if (creditPagination.totalCount > 0) {
+      const showing = Math.min(creditPagination.offset, creditPagination.totalCount);
+      summaryEl.textContent = `${showing} of ${creditPagination.totalCount} entries`;
+    } else {
+      summaryEl.textContent = "";
     }
   }
 
@@ -336,6 +357,8 @@ document.addEventListener("click", async (e) => {
   const container = btn.closest(".settle-inline");
   if (!id || !container) return;
   const input = container.querySelector(".settle-amount");
+  const dateInput = container.querySelector(".settle-date");
+  const modeSelect = container.querySelector(".settle-mode");
   const msg = container.querySelector(".settle-msg");
   msg.textContent = "";
 
@@ -345,6 +368,17 @@ document.addEventListener("click", async (e) => {
     msg.textContent = "Enter amount";
     return;
   }
+
+  const todayStrForValidation = typeof getLocalDateString === "function" ? getLocalDateString() : new Date().toISOString().slice(0, 10);
+  let settlementDate = dateInput?.value?.trim() || todayStrForValidation;
+  if (settlementDate > todayStrForValidation) {
+    msg.textContent = "Settlement date cannot be in the future";
+    return;
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(settlementDate)) {
+    settlementDate = todayStrForValidation;
+  }
+  const paymentMode = (modeSelect && modeSelect.value) ? modeSelect.value : "Cash";
 
   // fetch current amount for id to be safe
   const { data: currentRow, error: fetchErr } = await supabaseClient
@@ -364,13 +398,13 @@ document.addEventListener("click", async (e) => {
     return;
   }
 
-  const today = typeof getLocalDateString === "function" ? getLocalDateString() : new Date().toISOString().slice(0, 10);
   btn.disabled = true;
   const { data: rpcData, error: updateErr } = await supabaseClient.rpc("record_credit_payment", {
     p_credit_customer_id: id,
-    p_date: today,
+    p_date: settlementDate,
     p_amount: settleAmount,
     p_note: null,
+    p_payment_mode: paymentMode,
   });
   btn.disabled = false;
 
@@ -386,11 +420,11 @@ document.addEventListener("click", async (e) => {
     amountCell.setAttribute("data-amount", remaining);
     amountCell.textContent = formatCurrency(remaining);
   }
-  // update last payment cell (column 3)
+  // Update "Last paid" cell (column index 4)
   if (tr) {
     const cells = tr.querySelectorAll("td");
-    if (cells && cells.length >= 4) {
-      cells[3].textContent = today;
+    if (cells && cells.length >= 5) {
+      cells[4].textContent = formatDisplayDate(settlementDate);
     }
   }
 
@@ -409,7 +443,6 @@ document.addEventListener("click", async (e) => {
         container.parentElement.innerHTML = `<div class="settle-inline">
            <span class="muted">Cleared</span>
            <button class="delete-entry" data-id="${id}" title="Delete settled entry">Delete</button>
-           <span class="settle-msg muted" aria-hidden="true"></span>
          </div>`;
       }
     }, 800);

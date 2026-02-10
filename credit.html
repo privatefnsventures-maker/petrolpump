@@ -60,9 +60,22 @@
     </header>
 
     <main class="stack">
+      <section class="card credit-intro">
+        <h2>Credit ledger</h2>
+        <p class="muted">Record credit sales (with Transaction Date = DSR date) and settle payments (with Settlement Date). Backdated entries are supported; DSR and outstanding use business dates only.</p>
+        <div class="credit-date-glossary" role="region" aria-label="Date fields explained">
+          <strong>DSR-specific dates</strong>
+          <ul>
+            <li><strong>Transaction date</strong> — Business date when fuel was dispensed on credit. Drives DSR and outstanding.</li>
+            <li><strong>Settlement date</strong> — Business date when the customer paid (in the Action column).</li>
+            <li><strong>Last paid</strong> — Most recent settlement date for this customer (updated when you Settle).</li>
+          </ul>
+        </div>
+      </section>
+
       <section class="card">
         <h2>Record credit sale</h2>
-        <p class="muted">Add a new credit entry. Use the table below to settle or view outstanding balances.</p>
+        <p class="muted">Each entry is attached to a Transaction Date. Credit for a past date will appear in that day’s DSR.</p>
         <form id="credit-form" class="form">
           <div class="form-grid">
             <div class="form-field">
@@ -93,26 +106,51 @@
             </div>
 
             <div class="form-field">
-              <label for="amount">Amount due (₹)</label>
+              <label for="fuel-type">Fuel type <span class="optional-label">(optional)</span></label>
+              <select id="fuel-type" name="fuel_type" aria-describedby="fuel-type-hint">
+                <option value="">—</option>
+                <option value="MS">MS (Petrol)</option>
+                <option value="HSD">HSD (Diesel)</option>
+              </select>
+              <span id="fuel-type-hint" class="field-hint">Defaults to HSD if left blank</span>
+            </div>
+
+            <div class="form-field">
+              <label for="quantity">Quantity (L) <span class="optional-label">(optional)</span></label>
+              <input
+                id="quantity"
+                name="quantity"
+                type="number"
+                step="0.001"
+                min="0"
+                placeholder="—"
+              />
+              <span class="field-hint">Defaults to 1 if left blank</span>
+            </div>
+
+            <div class="form-field">
+              <label for="amount">Amount (₹)</label>
               <input
                 id="amount"
                 name="amount_due"
                 type="number"
                 step="0.01"
-                min="0"
+                min="0.01"
                 placeholder="0"
                 required
               />
             </div>
 
             <div class="form-field">
-              <label for="credit-date">Credit date</label>
+              <label for="credit-date">Transaction date</label>
               <input
                 id="credit-date"
                 name="credit_date"
                 type="date"
-                title="Day for which this credit applies (default today)"
+                title="Business date when fuel was dispensed (DSR date)"
+                aria-describedby="credit-date-hint"
               />
+              <span id="credit-date-hint" class="field-hint">DSR date for this credit</span>
             </div>
 
             <div class="form-field">
@@ -121,7 +159,7 @@
                 id="notes"
                 name="notes"
                 rows="2"
-                placeholder="Fuel type, credit terms, etc."
+                placeholder="Credit terms, reference, etc."
               ></textarea>
             </div>
           </div>
@@ -133,25 +171,30 @@
       </section>
 
       <section class="card">
-        <h2>Outstanding balances</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Customer</th>
-              <th>Vehicle</th>
-              <th>Amount due (₹)</th>
-              <th>Credit date</th>
-              <th>Last payment</th>
-              <th>Notes</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody id="credit-table-body">
-            <tr>
-              <td colspan="7" class="muted">Loading…</td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="card-head card-head-flex">
+          <h2>Outstanding balances</h2>
+          <p id="credit-ledger-summary" class="credit-ledger-summary muted" aria-live="polite"></p>
+        </div>
+        <div class="table-wrap">
+          <table class="credit-ledger-table">
+            <thead>
+              <tr>
+                <th>Customer</th>
+                <th>Vehicle</th>
+                <th>Outstanding (₹)</th>
+                <th>Transaction date</th>
+                <th>Last paid</th>
+                <th>Notes</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="credit-table-body">
+              <tr>
+                <td colspan="7" class="muted">Loading…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </section>
     </main>
     <footer>

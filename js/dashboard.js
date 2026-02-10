@@ -711,44 +711,38 @@ async function loadCreditSummary(dateStr) {
   const cacheKey = getCreditSummaryCacheKey(selectedDate);
 
   const fetchFn = async () => {
-    // Filter: last_payment <= selectedDate OR (last_payment is null AND credit date <= selectedDate)
-    const { data, error } = await supabaseClient
-      .from("credit_customers")
-      .select("amount_due")
-      .gt("amount_due", 0)
-      .or(
-        `and(last_payment.not.is.null,last_payment.lte.${selectedDate}),` +
-        `and(last_payment.is.null,date.lte.${selectedDate})`
-      );
+    // Outstanding as of date = sum(entries with transaction_date <= D) - sum(payments with date <= D)
+    const { data, error } = await supabaseClient.rpc("get_open_credit_as_of", {
+      p_date: selectedDate,
+    });
 
     if (error) {
       AppError.report(error, { context: "loadCreditSummary", date: selectedDate });
       return null;
     }
-    return data ?? [];
+    return data;
   };
 
-  // Always fetch fresh data so open credit reflects latest value (no cache-first)
-  let data = await fetchFn();
-  if (AppCache && data !== null && data !== undefined) {
-    AppCache.set(cacheKey, data, "credit_summary");
+  const total = await fetchFn();
+  if (AppCache && total !== null && total !== undefined) {
+    AppCache.set(cacheKey, total, "credit_summary");
   }
-  renderCreditSummary(data, creditTotal);
+  renderCreditSummary(total, creditTotal);
 }
 
 /**
- * Render credit summary to UI
+ * Render credit summary to UI (total is numeric from get_open_credit_as_of)
  */
-function renderCreditSummary(data, creditTotal) {
-  if (!data) {
+function renderCreditSummary(total, creditTotal) {
+  if (total === null || total === undefined) {
     lastCreditTotalRupees = null;
     if (creditTotal) creditTotal.textContent = "—";
     return;
   }
 
-  const total = data.reduce((sum, row) => sum + Number(row.amount_due ?? 0), 0);
-  lastCreditTotalRupees = total;
-  if (creditTotal) creditTotal.textContent = formatCurrency(total);
+  const value = Number(total);
+  lastCreditTotalRupees = value;
+  if (creditTotal) creditTotal.textContent = formatCurrency(value);
 }
 
 function calculateIncome(rows) {
@@ -909,12 +903,12 @@ async function loadDsrSummary(range) {
   // Use Edge Function for single round-trip (with fallback and caching)
   const dashboardData = await fetchDashboardData(range.start, range.end, onUpdate);
 
-  // Fetch credit in range (credit entries whose credit date falls in this period)
+  // Fetch credit in range: sum of credit_entries by transaction_date (DSR date)
   const { data: creditRows } = await supabaseClient
-    .from("credit_customers")
-    .select("amount_due, date")
-    .gte("date", range.start)
-    .lte("date", range.end);
+    .from("credit_entries")
+    .select("amount")
+    .gte("transaction_date", range.start)
+    .lte("transaction_date", range.end);
   dashboardData.creditData = creditRows ?? [];
 
   renderDsrSummary(dashboardData, elements);
@@ -1024,7 +1018,7 @@ function renderDsrSummary(data, elements) {
     ? petrolNetSale * (dsrPetrolRate || 0) + dieselNetSale * (dsrDieselRate || 0)
     : 0;
   const creditInRange = (creditData ?? []).reduce(
-    (sum, row) => sum + Number(row.amount_due ?? 0),
+    (sum, row) => sum + Number(row.amount ?? 0),
     0
   );
   const inHand = totalNetSaleRupees - expenseTotal - creditInRange;
