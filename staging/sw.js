@@ -3,7 +3,7 @@
  * Provides offline capability, network caching, and background sync
  */
 
-const CACHE_VERSION = "v2";
+const CACHE_VERSION = "v3";
 const STATIC_CACHE = `bpf-static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `bpf-dynamic-${CACHE_VERSION}`;
 const API_CACHE = `bpf-api-${CACHE_VERSION}`;
@@ -142,7 +142,13 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Handle API requests with network-first strategy
+  // Credit data must always be fresh - skip cache for credit_customers
+  if (isApiRequest(url) && isCreditApiRequest(url)) {
+    event.respondWith(fetch(request));
+    return;
+  }
+
+  // Handle other API requests with network-first strategy
   if (isApiRequest(url)) {
     event.respondWith(networkFirstStrategy(request, API_CACHE));
     return;
@@ -169,6 +175,13 @@ self.addEventListener("fetch", (event) => {
  */
 function isApiRequest(url) {
   return API_PATTERNS.some((pattern) => pattern.test(url.pathname));
+}
+
+/**
+ * Check if request is for credit_customers (open credit) - never cache so dashboard stays current
+ */
+function isCreditApiRequest(url) {
+  return url.pathname.includes("credit_customers") || (url.searchParams && url.searchParams.get("table") === "credit_customers");
 }
 
 /**

@@ -109,24 +109,31 @@ async function loadOpenCredit(dateStr, reset = false) {
     loadMoreBtn.textContent = "Loading…";
   }
 
+  // Same as dashboard: last_payment <= dateStr OR (last_payment is null AND credit date <= dateStr)
+  const outstandingAsOfFilter =
+    `and(last_payment.not.is.null,last_payment.lte.${dateStr}),` +
+    `and(last_payment.is.null,date.lte.${dateStr})`;
+
   try {
-    // Fetch total count of outstanding credits (only on reset)
+    // Fetch total count of outstanding credits as of dateStr (only on reset)
     if (reset || overduePagination.currentDate !== dateStr) {
       const { count, error: countError } = await supabaseClient
         .from("credit_customers")
         .select("*", { count: "exact", head: true })
-        .gt("amount_due", 0);
-      
+        .gt("amount_due", 0)
+        .or(outstandingAsOfFilter);
+
       if (!countError) {
         overduePagination.totalCount = count || 0;
       }
     }
 
-    // Fetch data with pagination
+    // Fetch data with pagination (filtered by outstanding as of dateStr)
     const { data, error } = await supabaseClient
       .from("credit_customers")
-      .select("customer_name, vehicle_no, amount_due, last_payment, created_at")
+      .select("customer_name, vehicle_no, amount_due, last_payment, date, created_at")
       .gt("amount_due", 0)
+      .or(outstandingAsOfFilter)
       .order("amount_due", { ascending: false })
       .range(overduePagination.offset, overduePagination.offset + PAGE_SIZE - 1);
 
@@ -161,15 +168,8 @@ async function loadOpenCredit(dateStr, reset = false) {
       return;
     }
 
-    // Filter data by date
-    const asOfDate = new Date(`${dateStr}T23:59:59.999Z`);
-    const newFiltered = (data ?? []).filter((row) => {
-      const last = row.last_payment ? new Date(`${row.last_payment}T00:00:00Z`) : null;
-      const created = row.created_at ? new Date(row.created_at) : null;
-      const effective = last || created;
-      if (!effective) return false;
-      return effective.getTime() <= asOfDate.getTime();
-    });
+    // Data is already filtered by DB (outstanding as of dateStr using last_payment or credit date)
+    const newFiltered = data ?? [];
 
     // Add to accumulated filtered data
     overduePagination.filteredData.push(...newFiltered);
