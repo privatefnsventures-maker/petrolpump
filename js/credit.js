@@ -32,9 +32,40 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Initialize pagination controls
   initPaginationControls();
-  
+
+  // Load existing customer names into dropdown (Temp + names from ledger)
+  loadCustomerNames();
+
   loadCreditLedger(true); // Initial load with reset
 });
+
+/**
+ * Load distinct customer names from credit_customers and populate the customer datalist.
+ * "Temp" is always shown first for one-off / temporary customers.
+ */
+async function loadCustomerNames() {
+  const datalist = document.getElementById("customer-list");
+  if (!datalist) return;
+  try {
+    const { data, error } = await supabaseClient
+      .from("credit_customers")
+      .select("customer_name")
+      .order("created_at", { ascending: false });
+    if (error) {
+      AppError.report(error, { context: "loadCustomerNames" });
+      return;
+    }
+    const names = [...new Set((data || []).map((r) => (r.customer_name || "").trim()).filter(Boolean))];
+    datalist.innerHTML = "<option value=\"Temp\">";
+    names.forEach((name) => {
+      const opt = document.createElement("option");
+      opt.value = name;
+      datalist.appendChild(opt);
+    });
+  } catch (e) {
+    AppError.report(e, { context: "loadCustomerNames" });
+  }
+}
 
 async function handleCreditSubmit(event, currentUserId) {
   event.preventDefault();
@@ -53,10 +84,12 @@ async function handleCreditSubmit(event, currentUserId) {
   const formData = new FormData(form);
   const creditDate = formData.get("credit_date")?.trim() || (typeof getLocalDateString === "function" ? getLocalDateString() : new Date().toISOString().slice(0, 10));
 
+  const customerName = (formData.get("customer_name") || "").trim();
+  const amountDue = Number(formData.get("amount_due") || 0);
   const payload = {
-    customer_name: formData.get("customer_name"),
+    customer_name: customerName,
     vehicle_no: formData.get("vehicle_no") || null,
-    amount_due: Number(formData.get("amount_due") || 0),
+    amount_due: amountDue,
     date: creditDate,
     notes: formData.get("notes") || null,
   };
@@ -64,9 +97,29 @@ async function handleCreditSubmit(event, currentUserId) {
     payload.created_by = currentUserId;
   }
 
-  const { error } = await supabaseClient
+  // If same customer name already exists (any date), cumulate credit to that customer's row
+  const { data: existing } = await supabaseClient
     .from("credit_customers")
-    .insert(payload);
+    .select("id, amount_due")
+    .ilike("customer_name", customerName)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  let error = null;
+  if (existing && existing.id) {
+    const newTotal = (Number(existing.amount_due) || 0) + amountDue;
+    const { error: updateErr } = await supabaseClient
+      .from("credit_customers")
+      .update({ amount_due: newTotal })
+      .eq("id", existing.id);
+    error = updateErr;
+  } else {
+    const { error: insertErr } = await supabaseClient
+      .from("credit_customers")
+      .insert(payload);
+    error = insertErr;
+  }
 
   if (error) {
     if (submitBtn) {
@@ -88,7 +141,8 @@ async function handleCreditSubmit(event, currentUserId) {
   }
   successEl?.classList.remove("hidden");
   loadCreditLedger(true); // Reset pagination to show new entry at top
-  
+  loadCustomerNames(); // Refresh dropdown so new names appear
+
   // Invalidate credit-related caches so dashboard shows fresh data
   if (typeof AppCache !== "undefined" && AppCache) {
     AppCache.invalidateByType("credit_summary");
@@ -150,7 +204,7 @@ async function loadCreditLedger(reset = false) {
     creditPagination.offset = 0;
     creditPagination.hasMore = true;
     creditPagination.totalCount = 0;
-    tbody.innerHTML = "<tr><td colspan='6' class='muted'>Fetching credit ledger…</td></tr>";
+    tbody.innerHTML = "<tr><td colspan='7' class='muted'>Fetching credit ledger…</td></tr>";
   }
 
   // Update button state
@@ -433,7 +487,7 @@ document.addEventListener("click", async (e) => {
       // Check if table is now empty
       const tbody = document.getElementById("credit-table-body");
       if (tbody && tbody.querySelectorAll("tr").length === 0) {
-        tbody.innerHTML = "<tr><td colspan='6' class='muted'>No credit customers recorded yet.</td></tr>";
+        tbody.innerHTML = "<tr><td colspan='7' class='muted'>No credit customers recorded yet.</td></tr>";
         creditPagination.hasMore = false;
         updatePaginationUI();
       }
