@@ -291,18 +291,18 @@ async function initializeDayClosing() {
         registerBody.innerHTML = data.map((row) => {
           const d = row.date;
           const ref = row.closing_reference ?? "—";
-          const fmt = (v) => (v != null && v !== "" ? formatCurrency(Number(v)) : "—");
+          const fmtNum = (v) => formatCurrency(Number(v ?? 0));
           return `<tr>
             <td>${d}</td>
             <td><code>${escapeHtml(ref)}</code></td>
-            <td>${fmt(row.total_sale)}</td>
-            <td>${fmt(row.collection)}</td>
-            <td>${fmt(row.short_previous)}</td>
-            <td>${fmt(row.credit_today)}</td>
-            <td>${fmt(row.expenses_today)}</td>
-            <td>${fmt(row.night_cash)}</td>
-            <td>${fmt(row.phone_pay)}</td>
-            <td>${fmt(row.short_today)}</td>
+            <td>${fmtNum(row.total_sale)}</td>
+            <td>${fmtNum(row.collection)}</td>
+            <td>${fmtNum(row.short_previous)}</td>
+            <td>${fmtNum(row.credit_today)}</td>
+            <td>${fmtNum(row.expenses_today)}</td>
+            <td>${fmtNum(row.night_cash)}</td>
+            <td>${fmtNum(row.phone_pay)}</td>
+            <td>${fmtNum(row.short_today)}</td>
             <td>${escapeHtml(row.remarks ?? "—")}</td>
           </tr>`;
         }).join("");
