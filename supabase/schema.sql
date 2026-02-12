@@ -882,14 +882,14 @@ begin
   if v_already_saved and v_existing.total_sale is not null then
     return jsonb_build_object(
       'date', p_date,
-      'total_sale', v_existing.total_sale,
-      'collection', v_existing.collection,
-      'short_previous', v_existing.short_previous,
-      'credit_today', v_existing.credit_today,
-      'expenses_today', v_existing.expenses_today,
-      'night_cash', v_existing.night_cash,
-      'phone_pay', v_existing.phone_pay,
-      'short_today', v_existing.short_today,
+      'total_sale', coalesce(v_existing.total_sale, 0),
+      'collection', coalesce(v_existing.collection, 0),
+      'short_previous', coalesce(v_existing.short_previous, 0),
+      'credit_today', coalesce(v_existing.credit_today, 0),
+      'expenses_today', coalesce(v_existing.expenses_today, 0),
+      'night_cash', coalesce(v_existing.night_cash, 0),
+      'phone_pay', coalesce(v_existing.phone_pay, 0),
+      'short_today', coalesce(v_existing.short_today, 0),
       'closing_reference', v_existing.closing_reference,
       'remarks', v_existing.remarks,
       'already_saved', true
@@ -918,8 +918,14 @@ begin
   from public.day_closing where date = p_date - interval '1 day' limit 1;
   v_short_previous := coalesce(v_short_previous, 0);
 
-  select coalesce(sum(amount_due), 0) into v_credit_today
+  -- Credit today: credit_entries.amount for transaction_date + legacy credit_customers.amount_due (no entries yet)
+  select coalesce(sum(amount), 0) into v_credit_today
   from public.credit_entries where transaction_date = p_date;
+  select v_credit_today + coalesce((
+    select sum(c.amount_due) from public.credit_customers c
+    where c.date = p_date
+      and not exists (select 1 from public.credit_entries e where e.credit_customer_id = c.id)
+  ), 0) into v_credit_today;
 
   select coalesce(sum(amount), 0) into v_expenses_today
   from public.expenses where date = p_date;
@@ -927,14 +933,14 @@ begin
   if v_already_saved then
     return jsonb_build_object(
       'date', p_date,
-      'total_sale', v_total_sale,
-      'collection', v_collection,
-      'short_previous', v_short_previous,
-      'credit_today', v_credit_today,
-      'expenses_today', v_expenses_today,
-      'night_cash', v_existing.night_cash,
-      'phone_pay', v_existing.phone_pay,
-      'short_today', v_existing.short_today,
+      'total_sale', coalesce(v_total_sale, 0),
+      'collection', coalesce(v_collection, 0),
+      'short_previous', coalesce(v_short_previous, 0),
+      'credit_today', coalesce(v_credit_today, 0),
+      'expenses_today', coalesce(v_expenses_today, 0),
+      'night_cash', coalesce(v_existing.night_cash, 0),
+      'phone_pay', coalesce(v_existing.phone_pay, 0),
+      'short_today', coalesce(v_existing.short_today, 0),
       'closing_reference', v_existing.closing_reference,
       'remarks', v_existing.remarks,
       'already_saved', true
@@ -943,11 +949,11 @@ begin
 
   return jsonb_build_object(
     'date', p_date,
-    'total_sale', v_total_sale,
-    'collection', v_collection,
-    'short_previous', v_short_previous,
-    'credit_today', v_credit_today,
-    'expenses_today', v_expenses_today,
+    'total_sale', coalesce(v_total_sale, 0),
+    'collection', coalesce(v_collection, 0),
+    'short_previous', coalesce(v_short_previous, 0),
+    'credit_today', coalesce(v_credit_today, 0),
+    'expenses_today', coalesce(v_expenses_today, 0),
     'night_cash', null,
     'phone_pay', null,
     'short_today', null,
@@ -957,7 +963,7 @@ begin
   );
 end;
 $$;
-comment on function public.get_day_closing_breakdown(date) is 'Returns day closing components. When already_saved with snapshot, returns stored values for accounting.';
+comment on function public.get_day_closing_breakdown(date) is 'Returns day closing components. When already_saved with snapshot, returns stored values for accounting. credit_today from credit_entries + legacy credit_customers.';
 
 -- RPC: Save day closing with full statement snapshot and accounting reference
 create or replace function public.save_day_closing(
@@ -1018,8 +1024,14 @@ begin
   from public.day_closing where date = p_date - interval '1 day' limit 1;
   v_short_previous := coalesce(v_short_previous, 0);
 
-  select coalesce(sum(amount_due), 0) into v_credit_today
+  -- Credit today: credit_entries.amount + legacy credit_customers.amount_due (no entries yet)
+  select coalesce(sum(amount), 0) into v_credit_today
   from public.credit_entries where transaction_date = p_date;
+  select v_credit_today + coalesce((
+    select sum(c.amount_due) from public.credit_customers c
+    where c.date = p_date
+      and not exists (select 1 from public.credit_entries e where e.credit_customer_id = c.id)
+  ), 0) into v_credit_today;
 
   select coalesce(sum(amount), 0) into v_expenses_today
   from public.expenses where date = p_date;
@@ -1049,20 +1061,20 @@ begin
 
   return jsonb_build_object(
     'date', p_date,
-    'total_sale', v_total_sale,
-    'collection', v_collection,
-    'short_previous', v_short_previous,
-    'night_cash', p_night_cash,
-    'phone_pay', p_phone_pay,
-    'credit_today', v_credit_today,
-    'expenses_today', v_expenses_today,
-    'short_today', v_short_today,
+    'total_sale', coalesce(v_total_sale, 0),
+    'collection', coalesce(v_collection, 0),
+    'short_previous', coalesce(v_short_previous, 0),
+    'credit_today', coalesce(v_credit_today, 0),
+    'expenses_today', coalesce(v_expenses_today, 0),
+    'night_cash', coalesce(p_night_cash, 0),
+    'phone_pay', coalesce(p_phone_pay, 0),
+    'short_today', coalesce(v_short_today, 0),
     'closing_reference', v_ref,
     'remarks', nullif(trim(p_remarks), '')
   );
 end;
 $$;
-comment on function public.save_day_closing(date, numeric, numeric, text) is 'Save day closing with full statement snapshot and accounting reference. One entry per date; duplicate save raises.';
+comment on function public.save_day_closing(date, numeric, numeric, text) is 'Save day closing with full statement snapshot and accounting reference. credit_today from credit_entries + legacy credit_customers.';
 
 -- RPC: Add credit entry (Transaction Date = DSR date)
 create or replace function public.add_credit_entry(
