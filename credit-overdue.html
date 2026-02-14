@@ -94,6 +94,75 @@
         </table>
       </section>
     </main>
+
+    <!-- Customer credit detail modal -->
+    <div id="customer-detail-overlay" class="overdue-detail-overlay" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="customer-detail-title">
+      <div class="overdue-detail-backdrop" id="customer-detail-backdrop"></div>
+      <div class="overdue-detail-card card">
+        <div class="overdue-detail-head">
+          <h2 id="customer-detail-title">Credit details</h2>
+          <button type="button" class="overdue-detail-close" id="customer-detail-close" aria-label="Close">×</button>
+        </div>
+        <p id="customer-detail-as-of" class="muted text-sm"></p>
+        <div id="customer-detail-content">
+          <div class="overdue-detail-summary">
+            <div class="overdue-detail-row overdue-detail-row-block">
+              <div>
+                <span class="overdue-detail-label">Credit taken</span>
+                <p id="customer-detail-credit-when" class="overdue-detail-when muted text-sm"></p>
+              </div>
+              <span id="customer-detail-credit-taken" class="overdue-detail-value">—</span>
+            </div>
+            <div class="overdue-detail-row overdue-detail-row-block">
+              <div>
+                <span class="overdue-detail-label">Settlement done</span>
+                <p id="customer-detail-settlement-when" class="overdue-detail-when muted text-sm"></p>
+              </div>
+              <span id="customer-detail-settlement-done" class="overdue-detail-value">—</span>
+            </div>
+            <div class="overdue-detail-row overdue-detail-row-remaining">
+              <span class="overdue-detail-label">Remaining</span>
+              <span id="customer-detail-remaining" class="overdue-detail-value">—</span>
+            </div>
+          </div>
+          <div class="overdue-detail-meta">
+            <p id="customer-detail-vehicle" class="text-sm muted"></p>
+          </div>
+          <div class="overdue-detail-breakdowns">
+            <div class="overdue-detail-breakdown">
+              <h3 class="overdue-detail-breakdown-title">Credit taken (breakdown)</h3>
+              <div class="table-wrap">
+                <table class="overdue-detail-table">
+                  <thead>
+                    <tr><th>Date</th><th>Amount (₹)</th></tr>
+                  </thead>
+                  <tbody id="customer-detail-credit-breakdown"></tbody>
+                </table>
+              </div>
+              <p id="customer-detail-credit-breakdown-empty" class="muted text-sm hidden">No credit entries.</p>
+            </div>
+            <div class="overdue-detail-breakdown">
+              <h3 class="overdue-detail-breakdown-title">Settlement done (breakdown)</h3>
+              <div class="table-wrap">
+                <table class="overdue-detail-table">
+                  <thead>
+                    <tr><th>Date</th><th>Amount (₹)</th></tr>
+                  </thead>
+                  <tbody id="customer-detail-settlement-breakdown"></tbody>
+                </table>
+              </div>
+              <p id="customer-detail-settlement-breakdown-empty" class="muted text-sm hidden">No settlements.</p>
+            </div>
+          </div>
+        </div>
+        <p id="customer-detail-error" class="error hidden"></p>
+        <p id="customer-detail-loading" class="muted hidden">Loading…</p>
+        <div class="overdue-detail-actions">
+          <button type="button" class="button-secondary" id="customer-detail-close-btn">Close</button>
+        </div>
+      </div>
+    </div>
+
     <footer>
       <small>Support: <a href="mailto:official@fnsventures.in">official@fnsventures.in</a> · <a href="https://wa.me/919668913299">WhatsApp +91 96689 13299</a></small>
     </footer>
