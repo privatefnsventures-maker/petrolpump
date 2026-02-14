@@ -41,6 +41,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Initialize pagination controls
   initOverduePaginationControls();
+  // Customer detail modal
+  initCustomerDetailModal();
   loadOpenCredit(todayStr, true);
 });
 
@@ -160,16 +162,19 @@ async function loadOpenCredit(dateStr, reset = false) {
       tbody.innerHTML = "";
     }
 
-    rowsToShow.forEach((row) => {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${escapeHtml(row.customer_name)}</td>
-        <td>${escapeHtml(row.vehicle_no ?? "—")}</td>
-        <td>${formatCurrency(row.amount_due_as_of)}</td>
-        <td>${formatDisplayDate(row.last_payment_date)}</td>
-        <td>${formatDisplayDate(row.sale_date)}</td>
-      `;
-      tbody.appendChild(tr);
+    tbody.innerHTML = rowsToShow
+      .map(
+        (row) =>
+          `<tr><td><span class="customer-name-link" data-customer-name="${escapeHtml(row.customer_name || "")}">${escapeHtml(row.customer_name || "—")}</span></td>` +
+          `<td>${escapeHtml(row.vehicle_no ?? "—")}</td><td>${formatCurrency(row.amount_due_as_of)}</td>` +
+          `<td>${formatDisplayDate(row.last_payment_date)}</td><td>${formatDisplayDate(row.sale_date)}</td></tr>`
+      )
+      .join("");
+    tbody.querySelectorAll(".customer-name-link").forEach((el) => {
+      el.addEventListener("click", (e) => {
+        e.preventDefault();
+        openCustomerDetail(el.dataset.customerName || el.textContent);
+      });
     });
 
     overduePagination.offset = reset ? rowsToShow.length : overduePagination.offset + rowsToShow.length;
@@ -221,17 +226,6 @@ function updateOverduePaginationUI() {
   }
 }
 
-function formatDate(value) {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
-
 function formatDisplayDate(dateStr) {
   if (!dateStr) return "—";
   const date = new Date(dateStr + "T00:00:00");
@@ -241,4 +235,133 @@ function formatDisplayDate(dateStr) {
     month: "short",
     year: "numeric",
   });
+}
+
+/** Cache modal element refs (set on first open) */
+let customerDetailEls = null;
+
+function getCustomerDetailEls() {
+  if (customerDetailEls) return customerDetailEls;
+  customerDetailEls = {
+    overlay: document.getElementById("customer-detail-overlay"),
+    title: document.getElementById("customer-detail-title"),
+    asOf: document.getElementById("customer-detail-as-of"),
+    content: document.getElementById("customer-detail-content"),
+    error: document.getElementById("customer-detail-error"),
+    loading: document.getElementById("customer-detail-loading"),
+    creditTaken: document.getElementById("customer-detail-credit-taken"),
+    settlementDone: document.getElementById("customer-detail-settlement-done"),
+    remaining: document.getElementById("customer-detail-remaining"),
+    creditWhen: document.getElementById("customer-detail-credit-when"),
+    settlementWhen: document.getElementById("customer-detail-settlement-when"),
+    vehicle: document.getElementById("customer-detail-vehicle"),
+    creditTbody: document.getElementById("customer-detail-credit-breakdown"),
+    settlementTbody: document.getElementById("customer-detail-settlement-breakdown"),
+    creditEmpty: document.getElementById("customer-detail-credit-breakdown-empty"),
+    settlementEmpty: document.getElementById("customer-detail-settlement-breakdown-empty"),
+  };
+  return customerDetailEls;
+}
+
+function initCustomerDetailModal() {
+  const els = getCustomerDetailEls();
+  if (!els.overlay) return;
+
+  function close() {
+    els.overlay.setAttribute("aria-hidden", "true");
+  }
+
+  const backdrop = document.getElementById("customer-detail-backdrop");
+  const closeBtn = document.getElementById("customer-detail-close");
+  const closeBtnFooter = document.getElementById("customer-detail-close-btn");
+  if (backdrop) backdrop.addEventListener("click", close);
+  if (closeBtn) closeBtn.addEventListener("click", close);
+  if (closeBtnFooter) closeBtnFooter.addEventListener("click", close);
+  els.overlay.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") close();
+  });
+}
+
+function renderBreakdownRows(entries) {
+  if (!entries || !entries.length) return "";
+  return entries
+    .map((e) => `<tr><td>${escapeHtml(formatDisplayDate(e.entry_date))}</td><td>${formatCurrency(e.amount)}</td></tr>`)
+    .join("");
+}
+
+function setBreakdownSection(tbody, emptyEl, entries, emptyMsg) {
+  if (tbody) tbody.innerHTML = renderBreakdownRows(entries);
+  if (emptyEl) {
+    emptyEl.textContent = entries.length === 0 ? emptyMsg : "";
+    emptyEl.classList.toggle("hidden", entries.length > 0);
+  }
+}
+
+async function openCustomerDetail(customerName) {
+  const name = customerName?.trim();
+  if (!name) return;
+
+  const els = getCustomerDetailEls();
+  if (!els.overlay || !els.title) return;
+
+  const dateInput = document.getElementById("credit-overdue-date");
+  const dateStr = dateInput?.value || new Date().toISOString().slice(0, 10);
+
+  els.title.textContent = escapeHtml(name);
+  els.asOf.textContent = `All figures as of ${formatDisplayDate(dateStr)} (reference date for this summary)`;
+  els.content.classList.add("hidden");
+  els.error.classList.add("hidden");
+  els.error.textContent = "";
+  els.loading.classList.remove("hidden");
+  els.loading.textContent = "Loading…";
+  els.overlay.setAttribute("aria-hidden", "false");
+
+  try {
+    const { data, error } = await supabaseClient.rpc("get_customer_credit_detail_as_of", {
+      p_customer_name: name,
+      p_date: dateStr,
+    });
+
+    els.loading.classList.add("hidden");
+
+    if (error) {
+      els.error.textContent = AppError.getUserMessage(error);
+      els.error.classList.remove("hidden");
+      AppError.report(error, { context: "openCustomerDetail" });
+      return;
+    }
+
+    const row = Array.isArray(data) && data.length > 0 ? data[0] : null;
+    if (!row) {
+      els.error.textContent = "No credit summary found for this customer.";
+      els.error.classList.remove("hidden");
+      return;
+    }
+
+    els.creditTaken.textContent = formatCurrency(row.credit_taken);
+    els.settlementDone.textContent = formatCurrency(row.settlement_done);
+    els.remaining.textContent = formatCurrency(row.remaining);
+
+    const first = row.first_sale_date ? formatDisplayDate(row.first_sale_date) : null;
+    const last = row.last_credit_date ? formatDisplayDate(row.last_credit_date) : null;
+    if (els.creditWhen) {
+      els.creditWhen.textContent = first && last ? `First credit: ${first} · Last credit: ${last}` : first ? `First credit: ${first}` : last ? `Last credit: ${last}` : "";
+    }
+    if (els.settlementWhen) {
+      els.settlementWhen.textContent = row.last_payment_date ? `Last settlement: ${formatDisplayDate(row.last_payment_date)}` : "";
+    }
+    if (els.vehicle) els.vehicle.textContent = row.vehicle_no ? `Vehicle: ${escapeHtml(row.vehicle_no)}` : "";
+
+    const creditEntries = Array.isArray(row.credit_entries) ? row.credit_entries : [];
+    const paymentEntries = Array.isArray(row.payment_entries) ? row.payment_entries : [];
+    setBreakdownSection(els.creditTbody, els.creditEmpty, creditEntries, "No credit entries.");
+    setBreakdownSection(els.settlementTbody, els.settlementEmpty, paymentEntries, "No settlements.");
+
+    els.content.classList.remove("hidden");
+  } catch (err) {
+    els.loading.classList.add("hidden");
+    els.error.textContent = AppError.getUserMessage(err);
+    els.error.classList.remove("hidden");
+    AppError.report(err, { context: "openCustomerDetail" });
+  }
 }

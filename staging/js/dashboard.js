@@ -840,12 +840,12 @@ async function fetchDashboardData(startDate, endDate, onUpdate = null) {
       const [dsrResult, stockResult, expenseResult] = await Promise.all([
         supabaseClient
           .from("dsr")
-          .select("product, total_sales, testing, stock, petrol_rate, diesel_rate")
+          .select("date, product, total_sales, testing, stock, petrol_rate, diesel_rate")
           .gte("date", startDate)
           .lte("date", endDate),
         supabaseClient
           .from("dsr_stock")
-          .select("product, variation")
+          .select("date, product, variation")
           .gte("date", startDate)
           .lte("date", endDate),
         supabaseClient
@@ -897,7 +897,7 @@ async function loadDsrSummary(range) {
 
   // Callback to update UI when fresh data arrives
   const onUpdate = (freshData) => {
-    renderDsrSummary(freshData, elements);
+    renderDsrSummary(freshData, elements, range);
   };
 
   // Use Edge Function for single round-trip (with fallback and caching)
@@ -911,17 +911,19 @@ async function loadDsrSummary(range) {
     .lte("transaction_date", range.end);
   dashboardData.creditData = creditRows ?? [];
 
-  renderDsrSummary(dashboardData, elements);
+  renderDsrSummary(dashboardData, elements, range);
   const todayStr = new Date().toISOString().slice(0, 10);
   if (range.start === todayStr && range.end === todayStr) {
     const inHandEl = document.getElementById("dsr-in-hand");
     const glanceCash = document.getElementById("glance-cash");
     if (glanceCash && inHandEl) glanceCash.textContent = inHandEl.textContent;
-    const petrolStock = sumByProduct(dashboardData.dsrData || [], "petrol", (row) => row.stock);
-    const dieselStock = sumByProduct(dashboardData.dsrData || [], "diesel", (row) => row.stock);
+    const lastDayDsr = (dashboardData.dsrData || []).filter((row) => row.date === range.end);
+    const petrolStock = sumByProduct(lastDayDsr, "petrol", (row) => row.stock);
+    const dieselStock = sumByProduct(lastDayDsr, "diesel", (row) => row.stock);
     updateLowStockAlert(petrolStock, dieselStock);
-    lastPetrolVariation = sumByProduct(dashboardData.stockData || [], "petrol", (row) => row.variation);
-    lastDieselVariation = sumByProduct(dashboardData.stockData || [], "diesel", (row) => row.variation);
+    const lastDayStockForAlert = (dashboardData.stockData || []).filter((row) => row.date === range.end);
+    lastPetrolVariation = sumByProduct(lastDayStockForAlert, "petrol", (row) => row.variation);
+    lastDieselVariation = sumByProduct(lastDayStockForAlert, "diesel", (row) => row.variation);
     updateSmartAlerts();
     loadDayClosingBanners();
   } else {
@@ -934,9 +936,10 @@ async function loadDsrSummary(range) {
 }
 
 /**
- * Render DSR summary data to UI elements
+ * Render DSR summary data to UI elements.
+ * Stock (L) tiles show dip stock for the last selected day (range.end) only.
  */
-function renderDsrSummary(data, elements) {
+function renderDsrSummary(data, elements, range) {
   const {
     petrolStockEl, dieselStockEl, petrolNetSaleEl, dieselNetSaleEl,
     petrolNetSaleRupeesEl, dieselNetSaleRupeesEl, petrolVariationEl,
@@ -954,8 +957,12 @@ function renderDsrSummary(data, elements) {
   const hasStock = !stockError;
   const hasExpense = !expenseError;
 
-  const petrolStock = sumByProduct(dsrData, "petrol", (row) => row.stock);
-  const dieselStock = sumByProduct(dsrData, "diesel", (row) => row.stock);
+  // Stock tiles: dip stock of last selected day from filter only
+  const lastDay = range?.end;
+  const lastDayDsr = lastDay ? (dsrData ?? []).filter((row) => row.date === lastDay) : [];
+  const petrolStock = sumByProduct(lastDayDsr, "petrol", (row) => row.stock);
+  const dieselStock = sumByProduct(lastDayDsr, "diesel", (row) => row.stock);
+  const hasLastDayStock = lastDay && lastDayDsr.length > 0;
   const petrolNetSale = sumByProduct(
     dsrData,
     "petrol",
@@ -966,16 +973,11 @@ function renderDsrSummary(data, elements) {
     "diesel",
     (row) => Number(row.total_sales ?? 0) - Number(row.testing ?? 0)
   );
-  const petrolVariation = sumByProduct(
-    stockData,
-    "petrol",
-    (row) => row.variation
-  );
-  const dieselVariation = sumByProduct(
-    stockData,
-    "diesel",
-    (row) => row.variation
-  );
+  // Variation tiles: variation of last selected day only
+  const lastDayStock = lastDay ? (stockData ?? []).filter((row) => row.date === lastDay) : [];
+  const petrolVariation = sumByProduct(lastDayStock, "petrol", (row) => row.variation);
+  const dieselVariation = sumByProduct(lastDayStock, "diesel", (row) => row.variation);
+  const hasLastDayVariation = lastDay && lastDayStock.length > 0;
   const expenseTotal = (expenseData ?? []).reduce(
     (sum, row) => sum + Number(row.amount ?? 0),
     0
@@ -992,10 +994,10 @@ function renderDsrSummary(data, elements) {
   const dsrDieselRate = dieselRates.length > 0 ? dieselRates[dieselRates.length - 1] : 0;
 
   if (petrolStockEl) {
-    petrolStockEl.textContent = hasDsr ? formatQuantity(petrolStock) : "—";
+    petrolStockEl.textContent = hasDsr && hasLastDayStock ? formatQuantity(petrolStock) : "—";
   }
   if (dieselStockEl) {
-    dieselStockEl.textContent = hasDsr ? formatQuantity(dieselStock) : "—";
+    dieselStockEl.textContent = hasDsr && hasLastDayStock ? formatQuantity(dieselStock) : "—";
   }
   if (petrolNetSaleEl) {
     petrolNetSaleEl.textContent = hasDsr ? formatQuantity(petrolNetSale) : "—";
@@ -1005,12 +1007,12 @@ function renderDsrSummary(data, elements) {
   }
   updateDsrNetSaleRupees(petrolNetSale, dieselNetSale, hasDsr, dsrPetrolRate, dsrDieselRate);
   if (petrolVariationEl) {
-    petrolVariationEl.textContent = hasStock ? formatQuantity(petrolVariation) : "—";
-    applyVariationTone(petrolVariationEl, petrolVariation, hasStock);
+    petrolVariationEl.textContent = hasStock && hasLastDayVariation ? formatQuantity(petrolVariation) : "—";
+    applyVariationTone(petrolVariationEl, petrolVariation, hasStock && hasLastDayVariation);
   }
   if (dieselVariationEl) {
-    dieselVariationEl.textContent = hasStock ? formatQuantity(dieselVariation) : "—";
-    applyVariationTone(dieselVariationEl, dieselVariation, hasStock);
+    dieselVariationEl.textContent = hasStock && hasLastDayVariation ? formatQuantity(dieselVariation) : "—";
+    applyVariationTone(dieselVariationEl, dieselVariation, hasStock && hasLastDayVariation);
   }
 
   // Day summary: total net sale (₹), expenses, credit in range, in hand
