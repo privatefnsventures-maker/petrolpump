@@ -16,6 +16,7 @@ interface DashboardRequest {
 }
 
 interface DsrRow {
+  date: string;
   product: string;
   total_sales: number | null;
   testing: number | null;
@@ -25,6 +26,7 @@ interface DsrRow {
 }
 
 interface StockRow {
+  date: string;
   product: string;
   variation: number | null;
 }
@@ -94,12 +96,12 @@ Deno.serve(async (req: Request) => {
     const [dsrResult, stockResult, expenseResult] = await Promise.all([
       supabase
         .from("dsr")
-        .select("product, total_sales, testing, stock, petrol_rate, diesel_rate")
+        .select("date, product, total_sales, testing, stock, petrol_rate, diesel_rate")
         .gte("date", startDate)
         .lte("date", endDate),
       supabase
         .from("dsr_stock")
-        .select("product, variation")
+        .select("date, product, variation")
         .gte("date", startDate)
         .lte("date", endDate),
       supabase
