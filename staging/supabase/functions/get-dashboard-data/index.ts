@@ -29,6 +29,7 @@ interface StockRow {
   date: string;
   product: string;
   variation: number | null;
+  dip_stock: number | null;
 }
 
 interface ExpenseRow {
@@ -101,7 +102,7 @@ Deno.serve(async (req: Request) => {
         .lte("date", endDate),
       supabase
         .from("dsr_stock")
-        .select("date, product, variation")
+        .select("date, product, variation, dip_stock")
         .gte("date", startDate)
         .lte("date", endDate),
       supabase
