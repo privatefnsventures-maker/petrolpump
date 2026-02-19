@@ -162,6 +162,11 @@ tbody tr:hover {
   font-size: var(--text-base);
 }
 
+.pagination-buttons {
+  display: flex;
+  gap: var(--space-2);
+}
+
 .pagination-controls button {
   min-height: var(--input-height);
   padding: 0 var(--space-3);
@@ -314,6 +319,28 @@ tbody tr:hover {
 .overdue-detail-table td:last-child {
   font-variant-numeric: tabular-nums;
   text-align: right;
+}
+.breakdown-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+}
+.breakdown-pagination-info {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+.breakdown-pagination-buttons {
+  display: flex;
+  gap: var(--space-2);
+}
+.breakdown-pagination-buttons .button-sm {
+  padding: 0.35rem 0.75rem;
+  font-size: var(--text-sm);
 }
 .overdue-detail-actions {
   margin-top: var(--space-4);
