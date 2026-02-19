@@ -10,11 +10,10 @@ function escapeHtml(str) {
     .replace(/'/g, "&#39;");
 }
 
-// Pagination state
+// Pagination state (page-based: 0 = first page)
 const PAGE_SIZE = 25;
 let overduePagination = {
-  offset: 0,
-  hasMore: true,
+  currentPage: 0,
   totalCount: 0,
   isLoading: false,
   currentDate: null,
@@ -63,17 +62,30 @@ function initOverduePaginationControls() {
     <div class="pagination-info">
       <span id="overdue-pagination-info" class="muted"></span>
     </div>
-    <button id="overdue-load-more" class="button-secondary hidden">Load more</button>
+    <div class="pagination-buttons">
+      <button type="button" id="overdue-pagination-back" class="button-secondary hidden">Back</button>
+      <button type="button" id="overdue-load-more" class="button-secondary hidden">Show more</button>
+    </div>
   `;
   tableSection.appendChild(paginationDiv);
 
-  // Attach load more handler
+  const backBtn = document.getElementById("overdue-pagination-back");
   const loadMoreBtn = document.getElementById("overdue-load-more");
+  if (backBtn) {
+    backBtn.addEventListener("click", () => {
+      if (overduePagination.currentPage > 0) {
+        overduePagination.currentPage--;
+        renderOverduePage();
+      }
+    });
+  }
   if (loadMoreBtn) {
     loadMoreBtn.addEventListener("click", () => {
-      const dateInput = document.getElementById("credit-overdue-date");
-      const dateStr = dateInput?.value || new Date().toISOString().slice(0, 10);
-      loadOpenCredit(dateStr, false);
+      const totalPages = Math.ceil(overduePagination.totalCount / PAGE_SIZE);
+      if (overduePagination.currentPage < totalPages - 1) {
+        overduePagination.currentPage++;
+        renderOverduePage();
+      }
     });
   }
 }
@@ -97,8 +109,7 @@ async function loadOpenCredit(dateStr, reset = false) {
 
   // Reset pagination state if needed or if date changed
   if (reset || overduePagination.currentDate !== dateStr) {
-    overduePagination.offset = 0;
-    overduePagination.hasMore = false;
+    overduePagination.currentPage = 0;
     overduePagination.totalCount = 0;
     overduePagination.currentDate = dateStr;
     overduePagination.filteredData = []; // Force fetch in try block
@@ -132,7 +143,7 @@ async function loadOpenCredit(dateStr, reset = false) {
 
       overduePagination.filteredData = listData ?? [];
       overduePagination.totalCount = overduePagination.filteredData.length;
-      overduePagination.hasMore = overduePagination.totalCount > PAGE_SIZE;
+      if (reset) overduePagination.currentPage = 0;
     }
 
     const asOfEl = document.getElementById("credit-overdue-as-of");
@@ -154,31 +165,7 @@ async function loadOpenCredit(dateStr, reset = false) {
       summary.textContent = `Total outstanding: ${formatCurrency(totalDue)} · ${overduePagination.totalCount} customers`;
     }
 
-    const sliceStart = reset ? 0 : overduePagination.offset;
-    const sliceEnd = sliceStart + PAGE_SIZE;
-    const rowsToShow = overduePagination.filteredData.slice(sliceStart, sliceEnd);
-
-    if (reset) {
-      tbody.innerHTML = "";
-    }
-
-    tbody.innerHTML = rowsToShow
-      .map(
-        (row) =>
-          `<tr><td><span class="customer-name-link" data-customer-name="${escapeHtml(row.customer_name || "")}">${escapeHtml(row.customer_name || "—")}</span></td>` +
-          `<td>${escapeHtml(row.vehicle_no ?? "—")}</td><td>${formatCurrency(row.amount_due_as_of)}</td>` +
-          `<td>${formatDisplayDate(row.last_payment_date)}</td><td>${formatDisplayDate(row.sale_date)}</td></tr>`
-      )
-      .join("");
-    tbody.querySelectorAll(".customer-name-link").forEach((el) => {
-      el.addEventListener("click", (e) => {
-        e.preventDefault();
-        openCustomerDetail(el.dataset.customerName || el.textContent);
-      });
-    });
-
-    overduePagination.offset = reset ? rowsToShow.length : overduePagination.offset + rowsToShow.length;
-    overduePagination.hasMore = overduePagination.offset < overduePagination.totalCount;
+    renderOverduePage();
 
   } catch (err) {
     if (reset) {
@@ -193,36 +180,73 @@ async function loadOpenCredit(dateStr, reset = false) {
 }
 
 /**
- * Update pagination UI elements for credit overdue
+ * Render the current page of the outstanding list from cached filteredData (no fetch).
+ */
+function renderOverduePage() {
+  const tbody = document.getElementById("credit-overdue-body");
+  if (!tbody || !overduePagination.filteredData.length) return;
+
+  const total = overduePagination.totalCount;
+  const page = overduePagination.currentPage;
+  const sliceStart = page * PAGE_SIZE;
+  const sliceEnd = Math.min(sliceStart + PAGE_SIZE, total);
+  const rowsToShow = overduePagination.filteredData.slice(sliceStart, sliceEnd);
+
+  tbody.innerHTML = rowsToShow
+    .map(
+      (row) =>
+        `<tr><td><span class="customer-name-link" data-customer-name="${escapeHtml(row.customer_name || "")}">${escapeHtml(row.customer_name || "—")}</span></td>` +
+        `<td>${escapeHtml(row.vehicle_no ?? "—")}</td><td>${formatCurrency(row.amount_due_as_of)}</td>` +
+        `<td>${formatDisplayDate(row.last_payment_date)}</td><td>${formatDisplayDate(row.sale_date)}</td></tr>`
+    )
+    .join("");
+  tbody.querySelectorAll(".customer-name-link").forEach((el) => {
+    el.addEventListener("click", (e) => {
+      e.preventDefault();
+      openCustomerDetail(el.dataset.customerName || el.textContent);
+    });
+  });
+}
+
+/**
+ * Update pagination UI elements for credit overdue (info text, Back, Show more).
  */
 function updateOverduePaginationUI() {
+  const backBtn = document.getElementById("overdue-pagination-back");
   const loadMoreBtn = document.getElementById("overdue-load-more");
   const paginationInfo = document.getElementById("overdue-pagination-info");
-  
-  // Update info text
+
   if (paginationInfo) {
     if (overduePagination.totalCount > 0) {
-      const showing = Math.min(overduePagination.offset, overduePagination.totalCount);
-      if (overduePagination.hasMore) {
-        paginationInfo.textContent = `Showing ${showing} of ${overduePagination.totalCount} entries`;
+      const totalPages = Math.ceil(overduePagination.totalCount / PAGE_SIZE);
+      const page = overduePagination.currentPage;
+      const from = page * PAGE_SIZE + 1;
+      const to = Math.min((page + 1) * PAGE_SIZE, overduePagination.totalCount);
+      const total = overduePagination.totalCount;
+      if (totalPages <= 1) {
+        paginationInfo.textContent = `Showing all ${total} entries`;
       } else {
-        paginationInfo.textContent = `Showing all ${overduePagination.totalCount} entries`;
+        paginationInfo.textContent = `Showing ${from}–${to} of ${total}`;
       }
     } else {
       paginationInfo.textContent = "";
     }
   }
 
-  // Update load more button
+  const totalPages = Math.ceil(overduePagination.totalCount / PAGE_SIZE);
+  const hasMultiplePages = totalPages > 1;
+  const canGoBack = overduePagination.currentPage > 0;
+  const canGoForward = overduePagination.currentPage < totalPages - 1;
+
+  if (backBtn) {
+    backBtn.textContent = "Back";
+    backBtn.disabled = !canGoBack;
+    backBtn.classList.toggle("hidden", !hasMultiplePages);
+  }
   if (loadMoreBtn) {
-    loadMoreBtn.disabled = false;
-    loadMoreBtn.textContent = "Load more";
-    
-    if (overduePagination.hasMore && overduePagination.filteredData.length > 0) {
-      loadMoreBtn.classList.remove("hidden");
-    } else {
-      loadMoreBtn.classList.add("hidden");
-    }
+    loadMoreBtn.textContent = "Show more";
+    loadMoreBtn.disabled = !canGoForward;
+    loadMoreBtn.classList.toggle("hidden", !hasMultiplePages);
   }
 }
 
@@ -236,6 +260,15 @@ function formatDisplayDate(dateStr) {
     year: "numeric",
   });
 }
+
+/** Breakdown table: show last 5 (most recent) per page, with Back / Show more */
+const BREAKDOWN_PAGE_SIZE = 5;
+
+/** Pagination state for modal breakdowns (entries sorted by date desc, page 0 = most recent) */
+let breakdownState = {
+  credit: { entries: [], page: 0 },
+  settlement: { entries: [], page: 0 },
+};
 
 /** Cache modal element refs (set on first open) */
 let customerDetailEls = null;
@@ -259,6 +292,14 @@ function getCustomerDetailEls() {
     settlementTbody: document.getElementById("customer-detail-settlement-breakdown"),
     creditEmpty: document.getElementById("customer-detail-credit-breakdown-empty"),
     settlementEmpty: document.getElementById("customer-detail-settlement-breakdown-empty"),
+    creditPagination: document.getElementById("customer-detail-credit-breakdown-pagination"),
+    creditPaginationInfo: document.getElementById("customer-detail-credit-breakdown-info"),
+    creditBack: document.getElementById("customer-detail-credit-breakdown-back"),
+    creditMore: document.getElementById("customer-detail-credit-breakdown-more"),
+    settlementPagination: document.getElementById("customer-detail-settlement-breakdown-pagination"),
+    settlementPaginationInfo: document.getElementById("customer-detail-settlement-breakdown-info"),
+    settlementBack: document.getElementById("customer-detail-settlement-breakdown-back"),
+    settlementMore: document.getElementById("customer-detail-settlement-breakdown-more"),
   };
   return customerDetailEls;
 }
@@ -280,6 +321,41 @@ function initCustomerDetailModal() {
   els.overlay.addEventListener("keydown", (e) => {
     if (e.key === "Escape") close();
   });
+
+  if (els.creditBack) {
+    els.creditBack.addEventListener("click", () => {
+      if (breakdownState.credit.page > 0) {
+        breakdownState.credit.page--;
+        renderBreakdownPage("credit");
+      }
+    });
+  }
+  if (els.creditMore) {
+    els.creditMore.addEventListener("click", () => {
+      const totalPages = Math.ceil(breakdownState.credit.entries.length / BREAKDOWN_PAGE_SIZE);
+      if (breakdownState.credit.page < totalPages - 1) {
+        breakdownState.credit.page++;
+        renderBreakdownPage("credit");
+      }
+    });
+  }
+  if (els.settlementBack) {
+    els.settlementBack.addEventListener("click", () => {
+      if (breakdownState.settlement.page > 0) {
+        breakdownState.settlement.page--;
+        renderBreakdownPage("settlement");
+      }
+    });
+  }
+  if (els.settlementMore) {
+    els.settlementMore.addEventListener("click", () => {
+      const totalPages = Math.ceil(breakdownState.settlement.entries.length / BREAKDOWN_PAGE_SIZE);
+      if (breakdownState.settlement.page < totalPages - 1) {
+        breakdownState.settlement.page++;
+        renderBreakdownPage("settlement");
+      }
+    });
+  }
 }
 
 function renderBreakdownRows(entries) {
@@ -289,12 +365,70 @@ function renderBreakdownRows(entries) {
     .join("");
 }
 
-function setBreakdownSection(tbody, emptyEl, entries, emptyMsg) {
-  if (tbody) tbody.innerHTML = renderBreakdownRows(entries);
-  if (emptyEl) {
-    emptyEl.textContent = entries.length === 0 ? emptyMsg : "";
-    emptyEl.classList.toggle("hidden", entries.length > 0);
+/** Sort entries by entry_date descending (newest first) */
+function sortEntriesByDateDesc(entries) {
+  if (!entries || !entries.length) return [];
+  return [...entries].sort((a, b) => {
+    const dA = (a.entry_date || "").toString();
+    const dB = (b.entry_date || "").toString();
+    return dB.localeCompare(dA);
+  });
+}
+
+/**
+ * Render one breakdown section's current page and update pagination UI.
+ * @param {"credit" | "settlement"} section
+ */
+function renderBreakdownPage(section) {
+  const els = getCustomerDetailEls();
+  const state = breakdownState[section];
+  const total = state.entries.length;
+  const totalPages = Math.max(1, Math.ceil(total / BREAKDOWN_PAGE_SIZE));
+  const page = Math.min(state.page, totalPages - 1);
+  state.page = page;
+
+  const tbody = section === "credit" ? els.creditTbody : els.settlementTbody;
+  const emptyEl = section === "credit" ? els.creditEmpty : els.settlementEmpty;
+  const emptyMsg = section === "credit" ? "No credit entries." : "No settlements.";
+  const paginationEl = section === "credit" ? els.creditPagination : els.settlementPagination;
+  const infoEl = section === "credit" ? els.creditPaginationInfo : els.settlementPaginationInfo;
+  const backBtn = section === "credit" ? els.creditBack : els.settlementBack;
+  const moreBtn = section === "credit" ? els.creditMore : els.settlementMore;
+
+  if (total === 0) {
+    if (tbody) tbody.innerHTML = "";
+    if (emptyEl) {
+      emptyEl.textContent = emptyMsg;
+      emptyEl.classList.remove("hidden");
+    }
+    if (paginationEl) paginationEl.classList.add("hidden");
+    return;
   }
+
+  const start = page * BREAKDOWN_PAGE_SIZE;
+  const end = Math.min(start + BREAKDOWN_PAGE_SIZE, total);
+  const slice = state.entries.slice(start, end);
+
+  if (tbody) tbody.innerHTML = renderBreakdownRows(slice);
+  if (emptyEl) emptyEl.classList.add("hidden");
+
+  if (paginationEl && infoEl && backBtn && moreBtn) {
+    paginationEl.classList.remove("hidden");
+    const from = start + 1;
+    const to = end;
+    infoEl.textContent = `Showing ${from}–${to} of ${total}`;
+    backBtn.disabled = page <= 0;
+    backBtn.classList.toggle("hidden", totalPages <= 1);
+    moreBtn.disabled = page >= totalPages - 1;
+    moreBtn.classList.toggle("hidden", totalPages <= 1);
+  }
+}
+
+function setBreakdownSection(tbody, emptyEl, entries, emptyMsg, section) {
+  const state = breakdownState[section];
+  state.entries = sortEntriesByDateDesc(entries || []);
+  state.page = 0;
+  renderBreakdownPage(section);
 }
 
 async function openCustomerDetail(customerName) {
@@ -354,8 +488,8 @@ async function openCustomerDetail(customerName) {
 
     const creditEntries = Array.isArray(row.credit_entries) ? row.credit_entries : [];
     const paymentEntries = Array.isArray(row.payment_entries) ? row.payment_entries : [];
-    setBreakdownSection(els.creditTbody, els.creditEmpty, creditEntries, "No credit entries.");
-    setBreakdownSection(els.settlementTbody, els.settlementEmpty, paymentEntries, "No settlements.");
+    setBreakdownSection(els.creditTbody, els.creditEmpty, creditEntries, "No credit entries.", "credit");
+    setBreakdownSection(els.settlementTbody, els.settlementEmpty, paymentEntries, "No settlements.", "settlement");
 
     els.content.classList.remove("hidden");
   } catch (err) {
