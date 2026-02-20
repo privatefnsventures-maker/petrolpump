@@ -229,6 +229,10 @@ $$;
 
 comment on function public.check_page_access(text) is 'Server-side page access validation. Returns allowed status and user role.';
 
+-- DSR (Daily Sales Register): primary daily record per (date, product).
+-- Filled by Meter Reading form: nozzle readings, total_sales, testing, dip_reading, stock (L), receipts, rates.
+-- Used by: day-closing (sales), P&L (buying price, receipts), dashboard (net sale, stock fallback), analysis.
+-- See also: dsr_stock for optional stock-reconciliation fields (dip_stock, variation); dashboard prefers dsr_stock when present.
 create table if not exists public.dsr (
   id uuid primary key default uuid_generate_v4(),
   date date not null,
@@ -258,9 +262,10 @@ create table if not exists public.dsr (
 
 create index if not exists dsr_date_idx on public.dsr (date desc, product);
 
-comment on table public.dsr is 'Nozzle readings for petrol and diesel pumps.';
+comment on table public.dsr is 'Primary DSR: nozzle readings and daily sales per (date, product). One row per day per product from Meter Reading form.';
 comment on column public.dsr.total_sales is 'Manual total for shift (sales_pump1 + sales_pump2 minus testing, etc.).';
-comment on column public.dsr.receipts is 'Fuel received (L) on this date. When > 0, admin can set buying_price_per_litre for profit calculation until next receipt.';
+comment on column public.dsr.stock is 'Stock (L) from meter form; dashboard uses this when dsr_stock has no row for that day.';
+comment on column public.dsr.receipts is 'Fuel received (L) on this date. When > 0, admin can set buying_price_per_litre for profit calculation until next receipt. Synced from dsr_stock when 0 (sync_dsr_receipts_from_stock).';
 comment on column public.dsr.buying_price_per_litre is 'Admin-only: cost per litre for fuel received on this date; used for profit from this date until next DSR with receipts > 0.';
 
 alter table public.dsr enable row level security;
@@ -306,7 +311,10 @@ create policy "dsr_delete_admin" on public.dsr
     public.is_admin()
   );
 
--- Stock register by product
+-- Stock register: optional detailed stock reconciliation per (date, product).
+-- Filled by Stock form on Meter Reading page (separate from main meter form).
+-- Used by: dashboard (dip_stock, variation; preferred over dsr.stock when present), sales-daily (opening/closing/variation), P&L (receipts source), sync_dsr_receipts_from_stock (source for dsr.receipts).
+-- When absent for a day, dashboard and sales-daily fall back to dsr (stock, etc.).
 create table if not exists public.dsr_stock (
   id uuid primary key default uuid_generate_v4(),
   date date not null,
@@ -327,7 +335,7 @@ create table if not exists public.dsr_stock (
 
 create index if not exists dsr_stock_date_idx on public.dsr_stock (date desc, product);
 
-comment on table public.dsr_stock is 'Daily stock reconciliation for each product.';
+comment on table public.dsr_stock is 'Optional stock reconciliation per (date, product). Filled by Stock form; dashboard prefers dip_stock/variation here over dsr when present.';
 
 alter table public.dsr_stock enable row level security;
 
