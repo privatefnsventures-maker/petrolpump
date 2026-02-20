@@ -739,6 +739,41 @@ footer a:hover {
   text-decoration: underline;
 }
 
+/* App footer — copyright and support (all app pages) */
+.app-footer {
+  margin-top: auto;
+  border-top: 1px solid #e2e8f0;
+  padding: 1.25rem 1.5rem;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 0.8125rem;
+}
+
+.app-footer .footer-copyright {
+  margin: 0 0 0.35rem 0;
+  font-weight: 600;
+  color: #475569;
+  letter-spacing: 0.02em;
+}
+
+.app-footer .footer-support {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.app-footer .footer-support a {
+  color: #64748b;
+}
+
+.app-footer--minimal {
+  padding: 1rem 1.5rem;
+}
+
+.app-footer--minimal .footer-copyright {
+  margin: 0;
+}
+
 /* Alert / reminder banners */
 .low-stock-alert,
 .smart-alert {
