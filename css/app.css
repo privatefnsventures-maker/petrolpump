@@ -555,6 +555,16 @@ tbody tr:hover {
   color: #1f2933;
 }
 
+.stock-register-section {
+  margin-top: 1.5rem;
+}
+
+.stock-register-section .meter-block table input[type="number"] {
+  width: 100%;
+  min-width: 3.5rem;
+  box-sizing: border-box;
+}
+
 .sheet-remarks label {
   display: block;
   font-weight: 600;
