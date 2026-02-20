@@ -1,4 +1,5 @@
-# Bishnupriya Fuels — Petrol Pump
+# Bishnupriya Fuels ( Petrol Pump )
+## A  F & S ventures Bussiness
 
 Web application for **daily operations**, **finance**, and **HR** at a fuel station: meter readings (DSR), stock reconciliation, credit ledger, expenses, day closing & short, employee attendance, salary, and P&L analysis. Built with static HTML/JS and [Supabase](https://supabase.com) (PostgreSQL, Auth, Row Level Security).
 
