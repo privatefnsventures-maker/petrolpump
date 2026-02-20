@@ -581,6 +581,7 @@ create table if not exists public.employee_attendance (
   employee_id uuid not null references public.employees (id) on delete restrict,
   date date not null,
   status text not null check (status in ('present', 'absent', 'half_day', 'leave')),
+  shift text,
   check_in time,
   check_out time,
   note text check (char_length(note) <= 200),
