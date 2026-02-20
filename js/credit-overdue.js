@@ -76,6 +76,7 @@ function initOverduePaginationControls() {
       if (overduePagination.currentPage > 0) {
         overduePagination.currentPage--;
         renderOverduePage();
+        updateOverduePaginationUI();
       }
     });
   }
@@ -85,6 +86,7 @@ function initOverduePaginationControls() {
       if (overduePagination.currentPage < totalPages - 1) {
         overduePagination.currentPage++;
         renderOverduePage();
+        updateOverduePaginationUI();
       }
     });
   }

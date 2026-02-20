@@ -918,8 +918,15 @@ async function loadDsrSummary(range) {
     const glanceCash = document.getElementById("glance-cash");
     if (glanceCash && inHandEl) glanceCash.textContent = inHandEl.textContent;
     const lastDayStockForAlert = (dashboardData.stockData || []).filter((row) => row.date === range.end);
-    const petrolStock = sumByProduct(lastDayStockForAlert, "petrol", (row) => Number(row.dip_stock ?? 0));
-    const dieselStock = sumByProduct(lastDayStockForAlert, "diesel", (row) => Number(row.dip_stock ?? 0));
+    const lastDayDsrForAlert = (dashboardData.dsrData || []).filter((row) => row.date === range.end);
+    const hasPetrolStock = lastDayStockForAlert.some((row) => normalizeProduct(row.product) === "petrol");
+    const hasDieselStock = lastDayStockForAlert.some((row) => normalizeProduct(row.product) === "diesel");
+    const petrolStock = hasPetrolStock
+      ? sumByProduct(lastDayStockForAlert, "petrol", (row) => Number(row.dip_stock ?? 0))
+      : sumByProduct(lastDayDsrForAlert, "petrol", (row) => Number(row.stock ?? 0));
+    const dieselStock = hasDieselStock
+      ? sumByProduct(lastDayStockForAlert, "diesel", (row) => Number(row.dip_stock ?? 0))
+      : sumByProduct(lastDayDsrForAlert, "diesel", (row) => Number(row.stock ?? 0));
     updateLowStockAlert(petrolStock, dieselStock);
     lastPetrolVariation = sumByProduct(lastDayStockForAlert, "petrol", (row) => row.variation);
     lastDieselVariation = sumByProduct(lastDayStockForAlert, "diesel", (row) => row.variation);
@@ -956,12 +963,23 @@ function renderDsrSummary(data, elements, range) {
   const hasStock = !stockError;
   const hasExpense = !expenseError;
 
-  // Stock tiles: dip stock for the selected day (or last day of range only)
+  // Stock tiles: dip stock for the selected day (or last day of range only).
+  // Prefer dsr_stock.dip_stock; fall back to dsr.stock when dsr_stock has no row for that day.
   const lastDay = range?.end;
   const lastDayStockRows = lastDay ? (stockData ?? []).filter((row) => row.date === lastDay) : [];
-  const petrolStock = sumByProduct(lastDayStockRows, "petrol", (row) => Number(row.dip_stock ?? 0));
-  const dieselStock = sumByProduct(lastDayStockRows, "diesel", (row) => Number(row.dip_stock ?? 0));
-  const hasLastDayStock = lastDay && lastDayStockRows.length > 0;
+  const lastDayDsrRows = lastDay ? (dsrData ?? []).filter((row) => row.date === lastDay) : [];
+  const petrolStockFromStock = sumByProduct(lastDayStockRows, "petrol", (row) => Number(row.dip_stock ?? 0));
+  const dieselStockFromStock = sumByProduct(lastDayStockRows, "diesel", (row) => Number(row.dip_stock ?? 0));
+  const petrolStockFromDsr = sumByProduct(lastDayDsrRows, "petrol", (row) => Number(row.stock ?? 0));
+  const dieselStockFromDsr = sumByProduct(lastDayDsrRows, "diesel", (row) => Number(row.stock ?? 0));
+  const hasPetrolInStock = lastDayStockRows.some((row) => normalizeProduct(row.product) === "petrol");
+  const hasDieselInStock = lastDayStockRows.some((row) => normalizeProduct(row.product) === "diesel");
+  const petrolStock = hasPetrolInStock ? petrolStockFromStock : petrolStockFromDsr;
+  const dieselStock = hasDieselInStock ? dieselStockFromStock : dieselStockFromDsr;
+  const hasLastDayStock =
+    lastDay &&
+    (lastDayStockRows.length > 0 || lastDayDsrRows.length > 0) &&
+    (Number.isFinite(petrolStock) || Number.isFinite(dieselStock));
   const petrolNetSale = sumByProduct(
     dsrData,
     "petrol",
@@ -972,15 +990,28 @@ function renderDsrSummary(data, elements, range) {
     "diesel",
     (row) => Number(row.total_sales ?? 0) - Number(row.testing ?? 0)
   );
-  // Variation tiles: single day = that day's variation; range = sum of all variations in the period
+  // Variation tiles: single day = that day's variation; range = sum of all variations in the period.
+  // Prefer dsr_stock.variation; when dsr_stock has no rows in range, derive from dsr.stock (stock change over period).
   const stockInRange = range
     ? (stockData ?? []).filter(
         (row) => row.date >= range.start && row.date <= range.end
       )
     : [];
-  const petrolVariation = sumByProduct(stockInRange, "petrol", (row) => Number(row.variation ?? 0));
-  const dieselVariation = sumByProduct(stockInRange, "diesel", (row) => Number(row.variation ?? 0));
-  const hasVariation = range && stockInRange.length > 0;
+  let petrolVariation = sumByProduct(stockInRange, "petrol", (row) => Number(row.variation ?? 0));
+  let dieselVariation = sumByProduct(stockInRange, "diesel", (row) => Number(row.variation ?? 0));
+  let hasVariation = range && stockInRange.length > 0;
+  const isRange = range && range.start !== range.end;
+  if (!hasVariation && isRange && hasDsr && (dsrData ?? []).length > 0) {
+    const firstDayDsr = (dsrData ?? []).filter((row) => row.date === range.start);
+    const lastDayDsrForVar = (dsrData ?? []).filter((row) => row.date === range.end);
+    const petrolFirst = sumByProduct(firstDayDsr, "petrol", (row) => Number(row.stock ?? 0));
+    const dieselFirst = sumByProduct(firstDayDsr, "diesel", (row) => Number(row.stock ?? 0));
+    const petrolLast = sumByProduct(lastDayDsrForVar, "petrol", (row) => Number(row.stock ?? 0));
+    const dieselLast = sumByProduct(lastDayDsrForVar, "diesel", (row) => Number(row.stock ?? 0));
+    petrolVariation = petrolLast - petrolFirst;
+    dieselVariation = dieselLast - dieselFirst;
+    hasVariation = firstDayDsr.length > 0 && lastDayDsrForVar.length > 0;
+  }
   const expenseTotal = (expenseData ?? []).reduce(
     (sum, row) => sum + Number(row.amount ?? 0),
     0
@@ -996,11 +1027,12 @@ function renderDsrSummary(data, elements, range) {
   const dsrPetrolRate = petrolRates.length > 0 ? petrolRates[petrolRates.length - 1] : 0;
   const dsrDieselRate = dieselRates.length > 0 ? dieselRates[dieselRates.length - 1] : 0;
 
+  const canShowStock = (hasStock || hasDsr) && hasLastDayStock;
   if (petrolStockEl) {
-    petrolStockEl.textContent = hasStock && hasLastDayStock ? formatQuantity(petrolStock) : "—";
+    petrolStockEl.textContent = canShowStock ? formatQuantity(petrolStock) : "—";
   }
   if (dieselStockEl) {
-    dieselStockEl.textContent = hasStock && hasLastDayStock ? formatQuantity(dieselStock) : "—";
+    dieselStockEl.textContent = canShowStock ? formatQuantity(dieselStock) : "—";
   }
   if (petrolNetSaleEl) {
     petrolNetSaleEl.textContent = hasDsr ? formatQuantity(petrolNetSale) : "—";
@@ -1009,13 +1041,14 @@ function renderDsrSummary(data, elements, range) {
     dieselNetSaleEl.textContent = hasDsr ? formatQuantity(dieselNetSale) : "—";
   }
   updateDsrNetSaleRupees(petrolNetSale, dieselNetSale, hasDsr, dsrPetrolRate, dsrDieselRate);
+  const canShowVariation = (hasStock || hasDsr) && hasVariation;
   if (petrolVariationEl) {
-    petrolVariationEl.textContent = hasStock && hasVariation ? formatQuantity(petrolVariation) : "—";
-    applyVariationTone(petrolVariationEl, petrolVariation, hasStock && hasVariation);
+    petrolVariationEl.textContent = canShowVariation ? formatQuantity(petrolVariation) : "—";
+    applyVariationTone(petrolVariationEl, petrolVariation, canShowVariation);
   }
   if (dieselVariationEl) {
-    dieselVariationEl.textContent = hasStock && hasVariation ? formatQuantity(dieselVariation) : "—";
-    applyVariationTone(dieselVariationEl, dieselVariation, hasStock && hasVariation);
+    dieselVariationEl.textContent = canShowVariation ? formatQuantity(dieselVariation) : "—";
+    applyVariationTone(dieselVariationEl, dieselVariation, canShowVariation);
   }
 
   // Day summary: total net sale (₹), expenses, credit in range, in hand
