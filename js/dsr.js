@@ -79,11 +79,13 @@ function getReadingNumberFields() {
 
 const readingNumberFields = getReadingNumberFields();
 
-// Pagination configuration and state
+// Pagination configuration and state (page-based: 0 = first page)
 const DSR_PAGE_SIZE = 10;
+/** Page size for "Recent meter entries" so "Load more" and Back show when there are more entries */
+const DSR_RECENT_PAGE_SIZE = 5;
 const dsrPagination = {
-  petrol: { offset: 0, hasMore: true, totalCount: 0, isLoading: false },
-  diesel: { offset: 0, hasMore: true, totalCount: 0, isLoading: false },
+  petrol: { currentPage: 0, totalCount: 0, isLoading: false },
+  diesel: { currentPage: 0, totalCount: 0, isLoading: false },
 };
 const stockPagination = {
   petrol: { offset: 0, hasMore: true, totalCount: 0, isLoading: false },
@@ -230,6 +232,9 @@ function initReadingForm(product) {
       return;
     }
 
+    // Auto-insert into dsr_stock when no row exists for this (date, product) so dashboard shows stock/variation
+    await syncDsrStockFromMeterEntry(payload);
+
     const hasReceipts = Number(payload.receipts) > 0;
     if (hasReceipts && typeof sessionStorage !== "undefined") {
       sessionStorage.setItem("pl_todo_pending", "1");
@@ -253,6 +258,7 @@ function initReadingForm(product) {
       }
     }
     loadReadingHistory(product, true); // Reset pagination to show new entry
+    loadStockHistory(product, true);   // Refresh stock list if we inserted a row
     // Invalidate cache so dashboard reflects new DSR immediately
     if (typeof AppCache !== "undefined" && AppCache) {
       AppCache.invalidateByType("dashboard_data");
@@ -263,43 +269,136 @@ function initReadingForm(product) {
   });
 }
 
+/**
+ * If no dsr_stock row exists for this (date, product), insert one from the meter payload
+ * so the dashboard shows stock/variation without requiring a separate Stock form entry.
+ * opening_stock = previous day's dip_stock (from dsr_stock or dsr.stock).
+ */
+async function syncDsrStockFromMeterEntry(payload) {
+  const date = payload.date;
+  const product = payload.product;
+  if (!date || !product) return;
+
+  const { data: existing } = await supabaseClient
+    .from("dsr_stock")
+    .select("id")
+    .eq("date", date)
+    .eq("product", product)
+    .limit(1)
+    .maybeSingle();
+
+  if (existing) return;
+
+  const openingStock = await getPreviousDayDipStock(product, date);
+  const receipts = toNumber(payload.receipts);
+  const totalSales = toNumber(payload.total_sales);
+  const testing = toNumber(payload.testing);
+  const netSale = Math.max(0, totalSales - testing);
+  const dipStock = toNumber(payload.stock);
+  const closingStock = (openingStock + receipts) - netSale;
+  const stockRow = {
+    date,
+    product,
+    opening_stock: openingStock,
+    receipts,
+    total_stock: openingStock + receipts,
+    sale_from_meter: totalSales,
+    testing,
+    net_sale: netSale,
+    closing_stock: closingStock,
+    dip_stock: dipStock,
+    variation: closingStock - dipStock,
+    remark: payload.remarks || null,
+  };
+  if (currentUserId) stockRow.created_by = currentUserId;
+
+  await supabaseClient.from("dsr_stock").insert(stockRow);
+}
+
+const STOCK_SUBMIT_LABEL = "Save stock entry";
+
+/** Fetch previous day's dip_stock for a product (from dsr_stock or dsr.stock). Returns a number. */
+async function getPreviousDayDipStock(product, dateStr) {
+  if (!dateStr || !product) return 0;
+  const prevDate = new Date(dateStr + "T12:00:00Z");
+  prevDate.setUTCDate(prevDate.getUTCDate() - 1);
+  const prevDateStr = prevDate.toISOString().slice(0, 10);
+  const { data: fromStock } = await supabaseClient
+    .from("dsr_stock")
+    .select("dip_stock")
+    .eq("date", prevDateStr)
+    .eq("product", product)
+    .maybeSingle();
+  if (fromStock != null && Number.isFinite(Number(fromStock.dip_stock))) return Number(fromStock.dip_stock);
+  const { data: fromDsr } = await supabaseClient
+    .from("dsr")
+    .select("stock")
+    .eq("date", prevDateStr)
+    .eq("product", product)
+    .maybeSingle();
+  if (fromDsr != null && Number.isFinite(Number(fromDsr.stock))) return Number(fromDsr.stock);
+  return 0;
+}
+
 function initStockForm(product) {
   const form = document.getElementById(`stock-form-${product}`);
   if (!form) return;
 
   setDefaultDate(form);
 
+  const dateInput = form.querySelector('input[name="date"]');
+  const openingInput = form.querySelector('input[name="opening_stock"]');
+  if (dateInput && openingInput) {
+    dateInput.addEventListener("change", async () => {
+      const dateStr = dateInput.value;
+      if (!dateStr) return;
+      const prev = await getPreviousDayDipStock(product, dateStr);
+      openingInput.value = prev > 0 ? String(prev) : "";
+    });
+  }
+
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
 
+    const submitBtn = form.querySelector('button[type="submit"]');
     const successEl = document.getElementById(`stock-success-${product}`);
     const errorEl = document.getElementById(`stock-error-${product}`);
     successEl?.classList.add("hidden");
     errorEl?.classList.add("hidden");
+    if (errorEl) errorEl.textContent = "";
 
-    const formData = new FormData(form);
-    const payload = {
-      date: formData.get("date"),
-      product,
-      remark: formData.get("remark") || null,
-    };
-    if (currentUserId) {
-      payload.created_by = currentUserId;
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Saving…";
     }
 
-    stockNumberFields.forEach((field) => {
-      payload[field] = toNumber(formData.get(field));
-    });
-
-    if (!payload.date) {
-      if (errorEl) {
-        errorEl.textContent = "Date is required.";
-        errorEl.classList.remove("hidden");
+    const formData = new FormData(form);
+    const date = formData.get("date");
+    if (!date) {
+      if (errorEl) errorEl.textContent = "Date is required.";
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = STOCK_SUBMIT_LABEL;
       }
       return;
     }
 
+    const payload = {
+      date,
+      product,
+      remark: formData.get("remark") || null,
+      ...Object.fromEntries(
+        stockNumberFields.map((f) => [f, toNumber(formData.get(f))])
+      ),
+    };
+    if (currentUserId) payload.created_by = currentUserId;
+
     const { error } = await supabaseClient.from("dsr_stock").insert(payload);
+
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = STOCK_SUBMIT_LABEL;
+    }
 
     if (error) {
       AppError.handle(error, { target: errorEl });
@@ -309,8 +408,7 @@ function initStockForm(product) {
     form.reset();
     setDefaultDate(form);
     successEl?.classList.remove("hidden");
-    loadStockHistory(product, true); // Reset pagination to show new entry
-    // Invalidate cache so dashboard reflects new stock entry immediately
+    loadStockHistory(product, true);
     if (typeof AppCache !== "undefined" && AppCache) {
       AppCache.invalidateByType("dashboard_data");
       AppCache.invalidateByType("today_sales");
@@ -337,14 +435,31 @@ function initDsrPaginationControls(product) {
     <div class="pagination-info">
       <span id="dsr-pagination-info-${product}" class="muted"></span>
     </div>
-    <button id="dsr-load-more-${product}" class="button-secondary hidden">Load more</button>
+    <div class="pagination-buttons">
+      <button type="button" id="dsr-pagination-back-${product}" class="button-secondary hidden">Back</button>
+      <button type="button" id="dsr-load-more-${product}" class="button-secondary hidden">Load more</button>
+    </div>
   `;
   historySection.appendChild(paginationDiv);
 
-  // Attach load more handler
+  const backBtn = document.getElementById(`dsr-pagination-back-${product}`);
   const loadMoreBtn = document.getElementById(`dsr-load-more-${product}`);
+  if (backBtn) {
+    backBtn.addEventListener("click", () => {
+      if (dsrPagination[product].currentPage > 0) {
+        dsrPagination[product].currentPage--;
+        loadReadingHistory(product, false);
+      }
+    });
+  }
   if (loadMoreBtn) {
-    loadMoreBtn.addEventListener("click", () => loadReadingHistory(product, false));
+    loadMoreBtn.addEventListener("click", () => {
+      const totalPages = Math.ceil(dsrPagination[product].totalCount / DSR_RECENT_PAGE_SIZE);
+      if (dsrPagination[product].currentPage < totalPages - 1) {
+        dsrPagination[product].currentPage++;
+        loadReadingHistory(product, false);
+      }
+    });
   }
 }
 
@@ -370,8 +485,7 @@ async function loadReadingHistory(product, reset = false) {
   const colCount = 7 + config.pumps; // date + pump sales + total_sales, testing, dip_reading, stock, rate, remarks
 
   if (reset) {
-    pagination.offset = 0;
-    pagination.hasMore = true;
+    pagination.currentPage = 0;
     pagination.totalCount = 0;
     tbody.innerHTML = `<tr><td colspan='${colCount}' class='muted'>Loading recent readings…</td></tr>`;
   }
@@ -389,7 +503,7 @@ async function loadReadingHistory(product, reset = false) {
         .from("dsr")
         .select("*", { count: "exact", head: true })
         .eq("product", product);
-      
+
       if (!countError) {
         pagination.totalCount = count || 0;
       }
@@ -397,14 +511,16 @@ async function loadReadingHistory(product, reset = false) {
 
     const pumpCols = Array.from({ length: config.pumps }, (_, i) => `sales_pump${i + 1}`).join(", ");
     const selectCols = `date, ${pumpCols}, total_sales, testing, dip_reading, stock, petrol_rate, diesel_rate, remarks`;
+    const rangeStart = pagination.currentPage * DSR_RECENT_PAGE_SIZE;
+    const rangeEnd = rangeStart + DSR_RECENT_PAGE_SIZE - 1;
 
-    // Fetch data with pagination using range
+    // Fetch current page only
     const { data, error } = await supabaseClient
       .from("dsr")
       .select(selectCols)
       .eq("product", product)
       .order("date", { ascending: false })
-      .range(pagination.offset, pagination.offset + DSR_PAGE_SIZE - 1);
+      .range(rangeStart, rangeEnd);
 
     if (error) {
       if (reset) {
@@ -416,42 +532,34 @@ async function loadReadingHistory(product, reset = false) {
       return;
     }
 
-    // Update pagination state
-    const fetchedCount = data?.length || 0;
-    pagination.offset += fetchedCount;
-    pagination.hasMore = fetchedCount === DSR_PAGE_SIZE;
+    const dataRows = data || [];
 
     // Handle empty data
-    if (reset && !fetchedCount) {
+    if (reset && dataRows.length === 0) {
       tbody.innerHTML = `<tr><td colspan='${colCount}' class='muted'>No readings saved yet.</td></tr>`;
       pagination.isLoading = false;
       updateDsrPaginationUI(product);
       return;
     }
 
-    // Clear loading message on initial load
-    if (reset) {
-      tbody.innerHTML = "";
-    }
-
-    // Append rows
+    // Replace tbody with current page rows
     const pumpColNames = Array.from({ length: config.pumps }, (_, i) => `sales_pump${i + 1}`);
-    data.forEach((row) => {
-      const tr = document.createElement("tr");
-      const rate = product === "petrol" ? row.petrol_rate : row.diesel_rate;
-      const pumpCells = pumpColNames.map((col) => `<td>${formatQuantity(row[col])}</td>`).join("");
-      tr.innerHTML = `
-        <td>${row.date}</td>
-        ${pumpCells}
-        <td>${formatQuantity(row.total_sales)}</td>
-        <td>${formatQuantity(row.testing)}</td>
-        <td>${formatQuantity(row.dip_reading)}</td>
-        <td>${formatQuantity(row.stock)}</td>
-        <td>${rate ? formatCurrency(rate) : "—"}</td>
-        <td>${escapeHtml(row.remarks ?? "—")}</td>
-      `;
-      tbody.appendChild(tr);
-    });
+    tbody.innerHTML = dataRows
+      .map((row) => {
+        const rate = product === "petrol" ? row.petrol_rate : row.diesel_rate;
+        const pumpCells = pumpColNames.map((col) => `<td>${formatQuantity(row[col])}</td>`).join("");
+        return `<tr>
+          <td>${row.date}</td>
+          ${pumpCells}
+          <td>${formatQuantity(row.total_sales)}</td>
+          <td>${formatQuantity(row.testing)}</td>
+          <td>${formatQuantity(row.dip_reading)}</td>
+          <td>${formatQuantity(row.stock)}</td>
+          <td>${rate ? formatCurrency(rate) : "—"}</td>
+          <td>${escapeHtml(row.remarks ?? "—")}</td>
+        </tr>`;
+      })
+      .join("");
 
   } catch (err) {
     if (reset) {
@@ -466,33 +574,44 @@ async function loadReadingHistory(product, reset = false) {
 }
 
 /**
- * Update pagination UI elements for DSR reading history
+ * Update pagination UI elements for DSR reading history (info text, Back, Load more).
  */
 function updateDsrPaginationUI(product) {
+  const backBtn = document.getElementById(`dsr-pagination-back-${product}`);
   const loadMoreBtn = document.getElementById(`dsr-load-more-${product}`);
   const paginationInfo = document.getElementById(`dsr-pagination-info-${product}`);
   const pagination = dsrPagination[product];
-  
-  // Update info text
+
   if (paginationInfo) {
     if (pagination.totalCount > 0) {
-      const showing = Math.min(pagination.offset, pagination.totalCount);
-      paginationInfo.textContent = `Showing ${showing} of ${pagination.totalCount} entries`;
+      const totalPages = Math.ceil(pagination.totalCount / DSR_RECENT_PAGE_SIZE);
+      const page = pagination.currentPage;
+      const from = page * DSR_RECENT_PAGE_SIZE + 1;
+      const to = Math.min((page + 1) * DSR_RECENT_PAGE_SIZE, pagination.totalCount);
+      const total = pagination.totalCount;
+      if (totalPages <= 1) {
+        paginationInfo.textContent = `Showing all ${total} entries`;
+      } else {
+        paginationInfo.textContent = `Showing ${from}–${to} of ${total}`;
+      }
     } else {
       paginationInfo.textContent = "";
     }
   }
 
-  // Update load more button
+  const totalPages = Math.ceil(pagination.totalCount / DSR_RECENT_PAGE_SIZE);
+  const hasMultiplePages = totalPages > 1;
+  const canGoBack = pagination.currentPage > 0;
+  const canGoForward = pagination.currentPage < totalPages - 1;
+
+  if (backBtn) {
+    backBtn.disabled = !canGoBack;
+    backBtn.classList.toggle("hidden", !hasMultiplePages);
+  }
   if (loadMoreBtn) {
-    loadMoreBtn.disabled = false;
+    loadMoreBtn.disabled = !canGoForward;
     loadMoreBtn.textContent = "Load more";
-    
-    if (pagination.hasMore && pagination.offset > 0) {
-      loadMoreBtn.classList.remove("hidden");
-    } else {
-      loadMoreBtn.classList.add("hidden");
-    }
+    loadMoreBtn.classList.toggle("hidden", !hasMultiplePages);
   }
 }
 
@@ -806,6 +925,12 @@ async function prefillOpeningFromPreviousDay(product, form) {
   if (error) return;
 
   applyOpeningMeterToForm(form, row, config);
+
+  const openingStock = await getPreviousDayDipStock(product, selectedDateStr);
+  const openingStockInput = form.querySelector('input[name="opening_stock"]');
+  if (openingStockInput) {
+    openingStockInput.value = openingStock > 0 ? openingStock.toFixed(2) : "";
+  }
 
   let rateValue = row?.[rateField];
   if (rateValue == null || !Number.isFinite(Number(rateValue))) {

@@ -440,6 +440,79 @@
             </table>
           </div>
         </div>
+
+        <div class="stock-register-section">
+          <h3 class="meter-title">Stock register (reconciliation)</h3>
+          <p class="muted">Optional: fill for dip stock and variation used on the dashboard. One row per date per product.</p>
+          <form id="stock-form-petrol" class="sheet-form" autocomplete="off">
+            <div class="meter-block">
+              <table class="dsr-table meter-table compact" aria-label="Petrol stock entry">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Opening stock (L)</th>
+                    <th>Receipts (L)</th>
+                    <th>Total stock (L)</th>
+                    <th>Sale from meter (L)</th>
+                    <th>Testing (L)</th>
+                    <th>Net sale (L)</th>
+                    <th>Closing stock (L)</th>
+                    <th>Dip stock (L)</th>
+                    <th>Variation (L)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><input name="date" type="date" required aria-label="Date" /></td>
+                    <td><input name="opening_stock" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0" required /></td>
+                    <td><input name="receipts" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0" required /></td>
+                    <td><input name="total_stock" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0" required /></td>
+                    <td><input name="sale_from_meter" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0" required /></td>
+                    <td><input name="testing" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0" required /></td>
+                    <td><input name="net_sale" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0" required /></td>
+                    <td><input name="closing_stock" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0" required /></td>
+                    <td><input name="dip_stock" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0" required /></td>
+                    <td><input name="variation" type="number" inputmode="decimal" step="0.01" placeholder="0" title="Can be negative (shortage)" /></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="sheet-remarks">
+              <label for="petrol-stock-remark">Remark</label>
+              <input id="petrol-stock-remark" name="remark" type="text" placeholder="Optional" />
+            </div>
+            <div class="sheet-actions">
+              <button type="submit">Save stock entry</button>
+              <p id="stock-success-petrol" class="success hidden">Entry saved.</p>
+              <p id="stock-error-petrol" class="error hidden"></p>
+            </div>
+          </form>
+          <div class="dsr-history">
+            <h3>Recent stock entries</h3>
+          <div class="table-scroll">
+            <table class="dsr-table meter-history">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Opening stock (L)</th>
+                  <th>Receipts (L)</th>
+                  <th>Total stock (L)</th>
+                  <th>Sale from meter (L)</th>
+                  <th>Testing (L)</th>
+                  <th>Net sale (L)</th>
+                  <th>Closing stock (L)</th>
+                  <th>Dip stock (L)</th>
+                  <th>Variation (L)</th>
+                  <th>Remark</th>
+                </tr>
+              </thead>
+              <tbody id="stock-table-petrol">
+                <tr><td colspan="11" class="muted">Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+          </div>
+        </div>
       </section>
 
 
@@ -821,6 +894,79 @@
                 </tr>
               </tbody>
             </table>
+          </div>
+        </div>
+
+        <div class="stock-register-section">
+          <h3 class="meter-title">Stock register (reconciliation)</h3>
+          <p class="muted">Optional: fill for dip stock and variation used on the dashboard. One row per date per product.</p>
+          <form id="stock-form-diesel" class="sheet-form" autocomplete="off">
+            <div class="meter-block">
+              <table class="dsr-table meter-table compact" aria-label="Diesel stock entry">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Opening stock (L)</th>
+                    <th>Receipts (L)</th>
+                    <th>Total stock (L)</th>
+                    <th>Sale from meter (L)</th>
+                    <th>Testing (L)</th>
+                    <th>Net sale (L)</th>
+                    <th>Closing stock (L)</th>
+                    <th>Dip stock (L)</th>
+                    <th>Variation (L)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><input name="date" type="date" required aria-label="Date" /></td>
+                    <td><input name="opening_stock" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0" required /></td>
+                    <td><input name="receipts" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0" required /></td>
+                    <td><input name="total_stock" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0" required /></td>
+                    <td><input name="sale_from_meter" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0" required /></td>
+                    <td><input name="testing" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0" required /></td>
+                    <td><input name="net_sale" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0" required /></td>
+                    <td><input name="closing_stock" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0" required /></td>
+                    <td><input name="dip_stock" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0" required /></td>
+                    <td><input name="variation" type="number" inputmode="decimal" step="0.01" placeholder="0" title="Can be negative (shortage)" /></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="sheet-remarks">
+              <label for="diesel-stock-remark">Remark</label>
+              <input id="diesel-stock-remark" name="remark" type="text" placeholder="Optional" />
+            </div>
+            <div class="sheet-actions">
+              <button type="submit">Save stock entry</button>
+              <p id="stock-success-diesel" class="success hidden">Entry saved.</p>
+              <p id="stock-error-diesel" class="error hidden"></p>
+            </div>
+          </form>
+          <div class="dsr-history">
+            <h3>Recent stock entries</h3>
+            <div class="table-scroll">
+              <table class="dsr-table meter-history">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Opening stock (L)</th>
+                    <th>Receipts (L)</th>
+                    <th>Total stock (L)</th>
+                    <th>Sale from meter (L)</th>
+                    <th>Testing (L)</th>
+                    <th>Net sale (L)</th>
+                    <th>Closing stock (L)</th>
+                    <th>Dip stock (L)</th>
+                    <th>Variation (L)</th>
+                    <th>Remark</th>
+                  </tr>
+                </thead>
+                <tbody id="stock-table-diesel">
+                  <tr><td colspan="11" class="muted">Loading…</td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </section>
