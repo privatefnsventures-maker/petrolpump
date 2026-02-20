@@ -359,6 +359,17 @@
   border-color: rgba(248, 250, 252, 0.6);
 }
 
+/* Copyright bar for landing / about */
+.footer-copyright-bar {
+  margin-top: 1.75rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.25);
+  text-align: center;
+  font-size: 0.8125rem;
+  color: #94a3b8;
+  letter-spacing: 0.02em;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .slide {
     transition: none;
