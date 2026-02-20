@@ -115,10 +115,52 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   loadStaffList();
+  initShiftsForm();
   initLowStockForm();
   initAlertsForm();
   initExpenseCategories();
 });
+
+function initShiftsForm() {
+  const form = document.getElementById("shifts-form");
+  const successEl = document.getElementById("shifts-success");
+  const fields = {
+    morningName: document.getElementById("shift-morning-name"),
+    morningStart: document.getElementById("shift-morning-start"),
+    morningEnd: document.getElementById("shift-morning-end"),
+    afternoonName: document.getElementById("shift-afternoon-name"),
+    afternoonStart: document.getElementById("shift-afternoon-start"),
+    afternoonEnd: document.getElementById("shift-afternoon-end"),
+  };
+  if (!form || !fields.morningName) return;
+  try {
+    fields.morningName.value = localStorage.getItem(SHIFT_KEYS.morningName) ?? DEFAULT_SHIFTS.morningName;
+    fields.morningStart.value = localStorage.getItem(SHIFT_KEYS.morningStart) ?? DEFAULT_SHIFTS.morningStart;
+    fields.morningEnd.value = localStorage.getItem(SHIFT_KEYS.morningEnd) ?? DEFAULT_SHIFTS.morningEnd;
+    fields.afternoonName.value = localStorage.getItem(SHIFT_KEYS.afternoonName) ?? DEFAULT_SHIFTS.afternoonName;
+    fields.afternoonStart.value = localStorage.getItem(SHIFT_KEYS.afternoonStart) ?? DEFAULT_SHIFTS.afternoonStart;
+    fields.afternoonEnd.value = localStorage.getItem(SHIFT_KEYS.afternoonEnd) ?? DEFAULT_SHIFTS.afternoonEnd;
+  } catch (_) {}
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    successEl?.classList.add("hidden");
+    try {
+      const morningName = (fields.morningName.value || "").trim() || DEFAULT_SHIFTS.morningName;
+      const morningStart = fields.morningStart.value || DEFAULT_SHIFTS.morningStart;
+      const morningEnd = fields.morningEnd.value || DEFAULT_SHIFTS.morningEnd;
+      const afternoonName = (fields.afternoonName.value || "").trim() || DEFAULT_SHIFTS.afternoonName;
+      const afternoonStart = fields.afternoonStart.value || DEFAULT_SHIFTS.afternoonStart;
+      const afternoonEnd = fields.afternoonEnd.value || DEFAULT_SHIFTS.afternoonEnd;
+      localStorage.setItem(SHIFT_KEYS.morningName, morningName);
+      localStorage.setItem(SHIFT_KEYS.morningStart, morningStart);
+      localStorage.setItem(SHIFT_KEYS.morningEnd, morningEnd);
+      localStorage.setItem(SHIFT_KEYS.afternoonName, afternoonName);
+      localStorage.setItem(SHIFT_KEYS.afternoonStart, afternoonStart);
+      localStorage.setItem(SHIFT_KEYS.afternoonEnd, afternoonEnd);
+      successEl?.classList.remove("hidden");
+    } catch (_) {}
+  });
+}
 
 function slugifyCategoryName(label) {
   return String(label || "")
@@ -253,6 +295,23 @@ async function handleDeleteExpenseCategory(btn) {
 
   loadExpenseCategories();
 }
+
+const SHIFT_KEYS = {
+  morningName: "petrolpump_shift_morning_name",
+  morningStart: "petrolpump_shift_morning_start",
+  morningEnd: "petrolpump_shift_morning_end",
+  afternoonName: "petrolpump_shift_afternoon_name",
+  afternoonStart: "petrolpump_shift_afternoon_start",
+  afternoonEnd: "petrolpump_shift_afternoon_end",
+};
+const DEFAULT_SHIFTS = {
+  morningName: "Morning shift",
+  morningStart: "06:00",
+  morningEnd: "14:00",
+  afternoonName: "Afternoon shift",
+  afternoonStart: "14:00",
+  afternoonEnd: "22:00",
+};
 
 const LOW_STOCK_KEYS = { petrol: "petrolpump_low_stock_threshold_petrol", diesel: "petrolpump_low_stock_threshold_diesel" };
 const ALERT_KEYS = {

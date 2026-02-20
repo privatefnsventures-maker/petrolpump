@@ -114,6 +114,42 @@
         </form>
       </section>
       <section class="card">
+        <h2>Attendance shifts</h2>
+        <p class="muted">Set shift names and times. On the Attendance page, choosing a shift will pre-fill check-in and check-out for that row.</p>
+        <form id="shifts-form" class="form" autocomplete="off">
+          <div class="form-grid" style="grid-template-columns: 1fr 1fr;">
+            <div class="form-field">
+              <label for="shift-morning-name">Morning shift name</label>
+              <input id="shift-morning-name" name="morningName" type="text" maxlength="60" placeholder="Morning shift" />
+            </div>
+            <div class="form-field"></div>
+            <div class="form-field">
+              <label for="shift-morning-start">Morning start</label>
+              <input id="shift-morning-start" name="morningStart" type="time" />
+            </div>
+            <div class="form-field">
+              <label for="shift-morning-end">Morning end</label>
+              <input id="shift-morning-end" name="morningEnd" type="time" />
+            </div>
+            <div class="form-field">
+              <label for="shift-afternoon-name">Afternoon shift name</label>
+              <input id="shift-afternoon-name" name="afternoonName" type="text" maxlength="60" placeholder="Afternoon shift" />
+            </div>
+            <div class="form-field"></div>
+            <div class="form-field">
+              <label for="shift-afternoon-start">Afternoon start</label>
+              <input id="shift-afternoon-start" name="afternoonStart" type="time" />
+            </div>
+            <div class="form-field">
+              <label for="shift-afternoon-end">Afternoon end</label>
+              <input id="shift-afternoon-end" name="afternoonEnd" type="time" />
+            </div>
+          </div>
+          <button type="submit">Save shifts</button>
+          <p id="shifts-success" class="success hidden">Shifts saved.</p>
+        </form>
+      </section>
+      <section class="card">
         <h2>Low stock alert</h2>
         <p class="muted">Set minimum stock (L) per product. Dashboard shows an alert when current stock is below these values.</p>
         <form id="low-stock-form" class="form" autocomplete="off">

@@ -9,13 +9,6 @@ function escapeHtml(str) {
     .replace(/'/g, "&#39;");
 }
 
-function formatTime(t) {
-  if (t == null || t === "") return "—";
-  const s = String(t);
-  if (/^\d{2}:\d{2}(:\d{2})?$/.test(s)) return s.slice(0, 5);
-  return s;
-}
-
 function getMonthStartEnd(year, month) {
   const m = month - 1;
   const start = new Date(year, m, 1);
@@ -32,6 +25,31 @@ const STATUS_LABELS = {
   half_day: "Half-day",
   leave: "Leave",
 };
+
+const SHIFT_STORAGE_KEYS = {
+  morningName: "petrolpump_shift_morning_name",
+  afternoonName: "petrolpump_shift_afternoon_name",
+};
+const DEFAULT_SHIFT_NAMES = { morningName: "Morning shift", afternoonName: "Afternoon shift" };
+
+function getShiftConfig() {
+  try {
+    return {
+      morningName: localStorage.getItem(SHIFT_STORAGE_KEYS.morningName) ?? DEFAULT_SHIFT_NAMES.morningName,
+      afternoonName: localStorage.getItem(SHIFT_STORAGE_KEYS.afternoonName) ?? DEFAULT_SHIFT_NAMES.afternoonName,
+    };
+  } catch (_) {
+    return { ...DEFAULT_SHIFT_NAMES };
+  }
+}
+
+function getShiftLabel(shiftValue) {
+  if (!shiftValue) return "—";
+  const cfg = getShiftConfig();
+  if (shiftValue === "morning") return cfg.morningName;
+  if (shiftValue === "afternoon") return cfg.afternoonName;
+  return shiftValue;
+}
 
 document.addEventListener("DOMContentLoaded", async () => {
   const auth = await requireAuth({
@@ -82,7 +100,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   async function loadAttendanceForDate(date) {
     const { data, error } = await supabaseClient
       .from("employee_attendance")
-      .select("id, employee_id, date, status, check_in, check_out, note")
+      .select("id, employee_id, date, status, shift, note")
       .eq("date", date);
 
     if (error) {
@@ -112,10 +130,17 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     if (!staffList.length) {
       attendanceBody.innerHTML =
-        '<tr><td colspan="6" class="muted">Add staff in <a href="salary.html">Staff Salary</a> (Manage staff) first.</td></tr>';
+        '<tr><td colspan="5" class="muted">Add staff in <a href="salary.html">Staff Salary</a> (Manage staff) first.</td></tr>';
       if (attendanceSummary) attendanceSummary.textContent = "";
       return;
     }
+
+    const shiftConfig = getShiftConfig();
+    const shiftOptions = [
+      { value: "", label: "—" },
+      { value: "morning", label: shiftConfig.morningName },
+      { value: "afternoon", label: shiftConfig.afternoonName },
+    ];
 
     const present = staffList.filter((s) => {
       const r = attendanceByDate.get(s.id);
@@ -150,13 +175,15 @@ document.addEventListener("DOMContentLoaded", async () => {
         const r = attendanceByDate.get(s.id);
         const id = r?.id ?? "";
         const status = r?.status ?? "present";
-        const checkIn = r?.check_in ? String(r.check_in).slice(0, 5) : "";
-        const checkOut = r?.check_out ? String(r.check_out).slice(0, 5) : "";
+        const shift = r?.shift ?? "";
         const note = escapeHtml((r?.note ?? "").toString());
         const name = escapeHtml(s.name);
         const role = s.role_display ? ` (${escapeHtml(s.role_display)})` : "";
         const options = ["present", "absent", "half_day", "leave"]
           .map((st) => `<option value="${st}" ${st === status ? "selected" : ""}>${STATUS_LABELS[st]}</option>`)
+          .join("");
+        const shiftSelectOptions = shiftOptions
+          .map((opt) => `<option value="${escapeHtml(opt.value)}" ${opt.value === shift ? "selected" : ""}>${escapeHtml(opt.label)}</option>`)
           .join("");
         return `
           <tr data-staff-id="${escapeHtml(s.id)}" data-record-id="${escapeHtml(id)}">
@@ -166,8 +193,11 @@ document.addEventListener("DOMContentLoaded", async () => {
                 ${options}
               </select>
             </td>
-            <td><input type="time" class="att-check-in" value="${escapeHtml(checkIn)}" data-staff-id="${escapeHtml(s.id)}" aria-label="Check-in for ${name}" /></td>
-            <td><input type="time" class="att-check-out" value="${escapeHtml(checkOut)}" data-staff-id="${escapeHtml(s.id)}" aria-label="Check-out for ${name}" /></td>
+            <td>
+              <select class="att-shift" data-staff-id="${escapeHtml(s.id)}" aria-label="Shift for ${name}">
+                ${shiftSelectOptions}
+              </select>
+            </td>
             <td><input type="text" class="att-note" value="${note}" maxlength="200" placeholder="Note" data-staff-id="${escapeHtml(s.id)}" /></td>
             <td><button type="button" class="att-save-row button-secondary" data-staff-id="${escapeHtml(s.id)}" data-record-id="${escapeHtml(id)}">Save</button></td>
           </tr>
@@ -187,21 +217,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!row) return;
 
     const statusEl = row.querySelector(".att-status");
-    const checkInEl = row.querySelector(".att-check-in");
-    const checkOutEl = row.querySelector(".att-check-out");
+    const shiftEl = row.querySelector(".att-shift");
     const noteEl = row.querySelector(".att-note");
 
     const status = statusEl?.value ?? "present";
-    const checkIn = checkInEl?.value?.trim() || null;
-    const checkOut = checkOutEl?.value?.trim() || null;
+    const shift = (shiftEl?.value || "").trim() || null;
     const note = noteEl?.value?.trim() || null;
 
     const payload = {
       employee_id: staffId,
       date,
       status,
-      check_in: checkIn,
-      check_out: checkOut,
+      shift,
       note,
       updated_at: new Date().toISOString(),
     };
@@ -242,21 +269,18 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (!row) continue;
 
       const statusEl = row.querySelector(".att-status");
-      const checkInEl = row.querySelector(".att-check-in");
-      const checkOutEl = row.querySelector(".att-check-out");
+      const shiftEl = row.querySelector(".att-shift");
       const noteEl = row.querySelector(".att-note");
 
       const status = statusEl?.value ?? "present";
-      const checkIn = checkInEl?.value?.trim() || null;
-      const checkOut = checkOutEl?.value?.trim() || null;
+      const shift = (shiftEl?.value || "").trim() || null;
       const note = noteEl?.value?.trim() || null;
 
       const payload = {
         employee_id: s.id,
         date,
         status,
-        check_in: checkIn,
-        check_out: checkOut,
+        shift,
         note,
         updated_at: new Date().toISOString(),
       };
@@ -288,7 +312,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   async function loadHistoryMonth(monthValue) {
     if (!historyBody) return;
     if (!monthValue) {
-      historyBody.innerHTML = '<tr><td colspan="6" class="muted">Select a month.</td></tr>';
+      historyBody.innerHTML = '<tr><td colspan="5" class="muted">Select a month.</td></tr>';
       return;
     }
 
@@ -297,13 +321,13 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     const { data, error } = await supabaseClient
       .from("employee_attendance")
-      .select("id, employee_id, date, status, check_in, check_out, note")
+      .select("id, employee_id, date, status, shift, note")
       .gte("date", start)
       .lte("date", end)
       .order("date", { ascending: false });
 
     if (error) {
-      historyBody.innerHTML = `<tr><td colspan="6" class="error">${escapeHtml(AppError.getUserMessage(error))}</td></tr>`;
+      historyBody.innerHTML = `<tr><td colspan="5" class="error">${escapeHtml(AppError.getUserMessage(error))}</td></tr>`;
       AppError.report(error, { context: "loadHistoryMonth" });
       return;
     }
@@ -312,7 +336,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const staffById = new Map(staffList.map((s) => [s.id, s]));
 
     if (!list.length) {
-      historyBody.innerHTML = '<tr><td colspan="6" class="muted">No attendance records for this month.</td></tr>';
+      historyBody.innerHTML = '<tr><td colspan="5" class="muted">No attendance records for this month.</td></tr>';
       return;
     }
 
@@ -320,13 +344,13 @@ document.addEventListener("DOMContentLoaded", async () => {
       .map((r) => {
         const staff = staffById.get(r.employee_id);
         const name = staff ? escapeHtml(staff.name) : "—";
+        const shiftLabel = escapeHtml(getShiftLabel(r.shift));
         return `
           <tr>
             <td>${escapeHtml(r.date)}</td>
             <td>${name}</td>
             <td>${STATUS_LABELS[r.status] ?? r.status}</td>
-            <td>${formatTime(r.check_in)}</td>
-            <td>${formatTime(r.check_out)}</td>
+            <td>${shiftLabel}</td>
             <td>${escapeHtml((r.note ?? "").toString())}</td>
           </tr>
         `;
@@ -341,7 +365,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     supabaseClient
       .from("employee_attendance")
-      .select("employee_id, date, status, check_in, check_out, note")
+      .select("employee_id, date, status, shift, note")
       .gte("date", start)
       .lte("date", end)
       .order("date", { ascending: false })
@@ -352,7 +376,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
         const list = data ?? [];
         const staffById = new Map(staffList.map((s) => [s.id, s]));
-        const headers = ["Date", "Staff", "Status", "Check-in", "Check-out", "Note"];
+        const headers = ["Date", "Staff", "Status", "Shift", "Note"];
         const rows = list.map((r) => {
           const staff = staffById.get(r.employee_id);
           const name = staff ? staff.name : "—";
@@ -360,8 +384,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             r.date,
             name,
             STATUS_LABELS[r.status] ?? r.status,
-            formatTime(r.check_in),
-            formatTime(r.check_out),
+            getShiftLabel(r.shift),
             (r.note ?? "").toString().replace(/"/g, '""'),
           ];
         });
