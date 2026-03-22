@@ -555,14 +555,37 @@ tbody tr:hover {
   color: #1f2933;
 }
 
-.stock-register-section {
-  margin-top: 1.5rem;
+.dsr-meter-locked-banner {
+  margin: 0 0 0.75rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 6px;
+  background: #ffedd5;
+  border: 1px solid #fdba74;
+  color: #9a3412;
+  font-size: 0.9rem;
+  line-height: 1.45;
 }
 
-.stock-register-section .meter-block table input[type="number"] {
-  width: 100%;
-  min-width: 3.5rem;
-  box-sizing: border-box;
+/* Same copy when shown under the form actions (e.g. blocked submit) */
+p.error.dsr-meter-locked-msg {
+  color: #9a3412;
+  background: #ffedd5;
+  border: 1px solid #fdba74;
+  padding: 0.55rem 0.75rem;
+  border-radius: 6px;
+  margin: 0;
+}
+
+form.dsr-meter-supervisor-locked .meter-stack input:not([name="date"]),
+form.dsr-meter-supervisor-locked .meter-stack textarea,
+form.dsr-meter-supervisor-locked .sheet-remarks textarea {
+  background-color: #f9fafb;
+  color: #6b7280;
+}
+
+form.dsr-meter-supervisor-locked .meter-stack input[name="date"] {
+  background-color: #fff;
+  color: inherit;
 }
 
 .sheet-remarks label {
@@ -634,11 +657,6 @@ tbody tr:hover {
 .meter-table input[type="number"]::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
-}
-
-.stock-table,
-.stock-history {
-  min-width: 880px;
 }
 
 @media (max-width: 768px) {
