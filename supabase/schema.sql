@@ -1263,7 +1263,7 @@ begin
   with bal as (
     select e.credit_customer_id,
            coalesce(sum(e.amount), 0) as credit_tot,
-           min(e.transaction_date) as min_txn_date
+           max(e.transaction_date) as last_txn_date
     from public.credit_entries e
     where e.transaction_date <= p_date
     group by e.credit_customer_id
@@ -1281,7 +1281,7 @@ begin
            c.vehicle_no,
            (coalesce(b.credit_tot, 0) - coalesce(p.payment_tot, 0))::numeric as amt,
            p.last_pay_date as last_pay,
-           b.min_txn_date as min_txn
+           b.last_txn_date as last_txn
     from public.credit_customers c
     left join bal b on b.credit_customer_id = c.id
     left join pay p on p.credit_customer_id = c.id
@@ -1291,13 +1291,13 @@ begin
          (max(pc.vehicle_no))::text as vehicle_no,
          sum(pc.amt)::numeric as amount_due_as_of,
          max(pc.last_pay) as last_payment_date,
-         min(pc.min_txn) as sale_date
+         max(pc.last_txn) as sale_date
   from per_customer pc
   group by lower(trim(pc.customer_name))
   order by amount_due_as_of desc;
 end;
 $$;
-comment on function public.get_outstanding_credit_list_as_of(date) is 'Customers with outstanding balance as of date D; one row per customer (grouped by name). amount_due_as_of and last_payment_date are as of D.';
+comment on function public.get_outstanding_credit_list_as_of(date) is 'Customers with outstanding balance as of date D; one row per customer (grouped by name). sale_date is the latest credit entry date on or before D; last_payment_date is as of D.';
 
 -- Credit summary for a single customer (by name) as of a date (for overdue page detail modal)
 create or replace function public.get_customer_credit_summary_as_of(
