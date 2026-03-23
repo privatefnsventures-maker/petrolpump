@@ -903,10 +903,10 @@ async function loadDsrSummary(range) {
   // Use Edge Function for single round-trip (with fallback and caching)
   const dashboardData = await fetchDashboardData(range.start, range.end, onUpdate);
 
-  // Fetch credit in range: sum of credit_entries by transaction_date (DSR date)
+  // Credit in range: outstanding on sales booked in period (amount − FIFO settlements)
   const { data: creditRows } = await supabaseClient
     .from("credit_entries")
-    .select("amount")
+    .select("amount, amount_settled")
     .gte("transaction_date", range.start)
     .lte("transaction_date", range.end);
   dashboardData.creditData = creditRows ?? [];
@@ -1051,15 +1051,16 @@ function renderDsrSummary(data, elements, range) {
     applyVariationTone(dieselVariationEl, dieselVariation, canShowVariation);
   }
 
-  // Day summary: total net sale (₹), expenses, credit in range, in hand
+  // Day summary: total net sale (₹), expenses, outstanding on period credit sales, in hand
   const totalNetSaleRupees = hasDsr && (dsrPetrolRate > 0 || dsrDieselRate > 0)
     ? petrolNetSale * (dsrPetrolRate || 0) + dieselNetSale * (dsrDieselRate || 0)
     : 0;
-  const creditInRange = (creditData ?? []).reduce(
-    (sum, row) => sum + Number(row.amount ?? 0),
-    0
-  );
-  const inHand = totalNetSaleRupees - expenseTotal - creditInRange;
+  const creditOutstandingInRange = (creditData ?? []).reduce((sum, row) => {
+    const amt = Number(row.amount ?? 0);
+    const settled = Number(row.amount_settled ?? 0);
+    return sum + Math.max(0, amt - settled);
+  }, 0);
+  const inHand = totalNetSaleRupees - expenseTotal - creditOutstandingInRange;
 
   if (totalNetSaleEl) {
     totalNetSaleEl.textContent = hasDsr ? formatCurrency(totalNetSaleRupees) : "—";
@@ -1068,7 +1069,7 @@ function renderDsrSummary(data, elements, range) {
     summaryExpenseEl.textContent = hasExpense ? formatCurrency(expenseTotal) : "—";
   }
   if (summaryCreditEl) {
-    summaryCreditEl.textContent = formatCurrency(creditInRange);
+    summaryCreditEl.textContent = formatCurrency(creditOutstandingInRange);
   }
   if (inHandEl) {
     inHandEl.textContent = hasDsr || hasExpense ? formatCurrency(inHand) : "—";
