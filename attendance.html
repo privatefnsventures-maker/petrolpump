@@ -6,7 +6,7 @@
     <title>Attendance · Bishnupriya Fuels</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%232563eb'><path d='M19 5v2h-4V5h4m-6 0v2H9V5h4m-6 0v2H5V5h4m15 6v2h-4v-2h4m-6 0v2H9v-2h4m-6 0v2H5v-2h4m15 6v2h-4v-2h4m-6 0v2H9v-2h4m-6 0v2H5v-2h4'/></svg>" type="image/svg+xml" />
     <link rel="stylesheet" href="css/base.css" />
-    <link rel="stylesheet" href="css/app.css" />
+    <link rel="stylesheet" href="css/app.css?v=8" />
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3"></script>
     <script defer src="js/env.js"></script>
     <script defer src="js/errorHandler.js"></script>
@@ -14,7 +14,7 @@
     <script defer src="js/utils.js"></script>
     <script defer src="js/supabase.js"></script>
     <script defer src="js/auth.js?v=2"></script>
-    <script defer src="js/attendance.js"></script>
+    <script defer src="js/attendance.js?v=8"></script>
   </head>
   <body>
     <header class="topbar">
@@ -75,7 +75,8 @@
           </div>
         </div>
         <div id="attendance-summary" class="muted margin-top" aria-live="polite"></div>
-        <table class="margin-top">
+        <div class="table-wrap margin-top">
+        <table class="attendance-mark-table">
           <thead>
             <tr>
               <th>Staff</th>
@@ -91,6 +92,7 @@
             </tr>
           </tbody>
         </table>
+        </div>
         <p id="attendance-message" class="success hidden" aria-live="polite"></p>
         <p id="attendance-error" class="error hidden" aria-live="polite"></p>
       </section>
@@ -99,32 +101,29 @@
         <div class="card-head snapshot-head">
           <div>
             <h2>Attendance history</h2>
-            <p class="muted">View attendance records by month. Use Staff Salary to add staff first.</p>
+            <p class="muted">Month grid: each column is a day; scan across a row to see that staff member’s month at a glance. Hover a cell for shift and note. Use Download CSV for a detailed list.</p>
           </div>
           <div class="snapshot-controls">
             <div class="form-field">
               <label for="history-month">Month</label>
               <input id="history-month" type="month" />
             </div>
+            <button type="button" id="history-refresh" class="button-secondary" title="Reload this month from the server">Refresh</button>
             <button type="button" id="history-download-csv" class="button-secondary">Download CSV</button>
           </div>
         </div>
-        <table class="margin-top">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Staff</th>
-              <th>Status</th>
-              <th>Shift</th>
-              <th>Note</th>
-            </tr>
-          </thead>
-          <tbody id="attendance-history-body">
-            <tr>
-              <td colspan="5" class="muted">Select a month.</td>
-            </tr>
-          </tbody>
-        </table>
+        <p id="attendance-matrix-summary" class="attendance-matrix-summary muted margin-top" aria-live="polite"></p>
+        <div id="attendance-matrix-wrap" class="table-wrap attendance-matrix-wrap margin-top" role="region" aria-label="Attendance by day"></div>
+        <ul class="attendance-matrix-legend" aria-label="Status legend">
+          <li><span class="att-legend-swatch att-cell-present" aria-hidden="true">P</span> Present</li>
+          <li><span class="att-legend-swatch att-cell-absent" aria-hidden="true">A</span> Absent</li>
+          <li><span class="att-legend-swatch att-cell-half" aria-hidden="true">H</span> Half-day</li>
+          <li><span class="att-legend-swatch att-cell-leave" aria-hidden="true">L</span> Leave</li>
+          <li><span class="att-legend-swatch att-cell-empty" aria-hidden="true">—</span> Not marked</li>
+        </ul>
+        <p class="attendance-matrix-shift-note muted margin-top">
+          When a shift is saved: <strong>Mo</strong> = morning shift, <strong>Af</strong> = afternoon shift (small text under the letter; hover still shows your custom shift names).
+        </p>
       </section>
     </main>
     <footer class="app-footer">

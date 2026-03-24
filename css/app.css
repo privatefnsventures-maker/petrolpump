@@ -1333,3 +1333,209 @@ form.dsr-meter-supervisor-locked .meter-stack input[name="date"] {
 .dashboard-page .day-closing-card .form-actions {
   margin-top: 0.75rem;
 }
+
+/* Attendance: daily mark table row tint (absent / half-day / leave stand out) */
+.attendance-mark-table tbody tr.att-row-absent {
+  background: #fef2f2;
+}
+.attendance-mark-table tbody tr.att-row-absent:hover {
+  background: #fee2e2;
+}
+.attendance-mark-table tbody tr.att-row-half {
+  background: #fffbeb;
+}
+.attendance-mark-table tbody tr.att-row-half:hover {
+  background: #fef3c7;
+}
+.attendance-mark-table tbody tr.att-row-leave {
+  background: #eff6ff;
+}
+.attendance-mark-table tbody tr.att-row-leave:hover {
+  background: #dbeafe;
+}
+
+/* Attendance: month matrix (staff × day) */
+.attendance-matrix-summary {
+  margin-bottom: 0;
+  font-size: var(--text-sm, 0.875rem);
+}
+
+.attendance-matrix-wrap {
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 6px);
+  background: var(--surface);
+}
+
+.att-matrix-placeholder {
+  margin: 1rem;
+}
+
+.att-matrix-role {
+  font-weight: 400;
+}
+
+table.attendance-matrix {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.attendance-matrix th,
+.attendance-matrix td {
+  border: 1px solid var(--border);
+  padding: 0.35rem 0.25rem;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.attendance-matrix th.att-matrix-staff-col,
+.attendance-matrix td.att-matrix-staff-col {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  text-align: left;
+  min-width: 9.5rem;
+  max-width: 14rem;
+  padding-left: 0.6rem;
+  padding-right: 0.5rem;
+  background: var(--surface);
+  box-shadow: 1px 0 0 var(--border);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.attendance-matrix thead th.att-matrix-staff-col {
+  z-index: 3;
+  vertical-align: bottom;
+}
+
+.attendance-matrix thead th.att-matrix-day {
+  font-weight: 600;
+  line-height: 1.2;
+  padding: 0.4rem 0.2rem;
+  min-width: 2rem;
+}
+
+.attendance-matrix thead th.att-matrix-day.att-matrix-weekend {
+  background: var(--surface-elevated, #f8fafc);
+  color: var(--muted, #64748b);
+}
+
+.att-matrix-daynum {
+  display: block;
+  font-size: 0.8125rem;
+}
+
+.att-matrix-wd {
+  display: block;
+  font-size: 0.65rem;
+  font-weight: 500;
+  color: var(--muted, #64748b);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+/* Keep <td> as table-cell; flex inside breaks column alignment in some browsers */
+.attendance-matrix td.att-cell {
+  padding: 0.2rem 0.15rem;
+  cursor: default;
+  vertical-align: middle;
+  text-align: center;
+}
+
+.attendance-matrix td.att-cell .att-cell-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.1rem;
+  line-height: 1.05;
+  min-height: 1.85rem;
+}
+
+.attendance-matrix td.att-cell .att-cell-main {
+  font-weight: 700;
+  font-size: 0.72rem;
+  line-height: 1;
+}
+
+/* Shift hint only — neutral; present/absent colors stay on the main letter */
+.attendance-matrix td.att-cell .att-cell-shift {
+  font-weight: 600;
+  font-size: 0.52rem;
+  line-height: 1;
+  color: rgba(15, 23, 42, 0.48);
+  letter-spacing: 0.02em;
+}
+
+.attendance-matrix td.att-cell-present {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.attendance-matrix td.att-cell-absent {
+  background: #fecaca;
+  color: #991b1b;
+}
+
+.attendance-matrix td.att-cell-half {
+  background: #fde68a;
+  color: #92400e;
+}
+
+.attendance-matrix td.att-cell-leave {
+  background: #bfdbfe;
+  color: #1e40af;
+}
+
+.attendance-matrix td.att-cell-empty {
+  background: var(--surface-elevated, #f8fafc);
+  color: #cbd5e1;
+  font-weight: 600;
+}
+
+.attendance-matrix td.att-cell-empty .att-cell-stack {
+  min-height: auto;
+}
+
+.attendance-matrix td.att-cell-empty .att-cell-main {
+  font-weight: 600;
+}
+
+.attendance-matrix-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-sm, 0.8125rem);
+  color: var(--muted, #64748b);
+}
+
+.attendance-matrix-legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.att-legend-swatch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 4px;
+  font-weight: 700;
+  font-size: 0.7rem;
+  border: 1px solid var(--border);
+}
+
+.attendance-matrix-shift-note {
+  font-size: var(--text-sm, 0.8125rem);
+  margin-bottom: 0;
+  max-width: 48rem;
+}
