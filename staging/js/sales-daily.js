@@ -1,5 +1,14 @@
 /* global supabaseClient, requireAuth, applyRoleVisibility, getValidFilterState, setFilterState */
 
+function escapeHtml(str) {
+  return String(str ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
   const YYYYMMDD = /^\d{4}-\d{2}-\d{2}$/;
   const dateFromDashboard = (() => {
@@ -27,7 +36,15 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   const startInput = document.getElementById("sales-start-date");
   const endInput = document.getElementById("sales-end-date");
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const todayStr = now.toISOString().slice(0, 10);
+  const curY = now.getFullYear();
+  const curM = now.getMonth();
+  const pad2 = (n) => String(n).padStart(2, "0");
+  const currentMonthRange = {
+    start: `${curY}-${pad2(curM + 1)}-01`,
+    end: `${curY}-${pad2(curM + 1)}-${pad2(new Date(curY, curM + 1, 0).getDate())}`,
+  };
 
   if (startInput && endInput) {
     const SALES_DAILY_RANGES = new Set(["custom"]);
@@ -44,8 +61,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       startInput.value = stored.start;
       endInput.value = stored.end;
     } else {
-      startInput.value = todayStr;
-      endInput.value = todayStr;
+      startInput.value = currentMonthRange.start;
+      endInput.value = currentMonthRange.end;
     }
 
     const saveSalesDailyFilter = () => {
@@ -69,10 +86,43 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 });
 
+const TABLE_COLS = 11;
+
+function setProductTableLoading(tbody) {
+  tbody.innerHTML = `<tr><td colspan="${TABLE_COLS}" class="muted">Loading…</td></tr>`;
+}
+
+function renderProductRows(tbody, rows) {
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="${TABLE_COLS}" class="muted">No entries found.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows
+    .map((row) => {
+      const netSale = Number(row.total_sales ?? 0) - Number(row.testing ?? 0);
+      return `<tr>
+        <td>${escapeHtml(row.date)}</td>
+        <td>${formatQuantity(row.sales_pump1)}</td>
+        <td>${formatQuantity(row.sales_pump2)}</td>
+        <td>${formatQuantity(row.total_sales)}</td>
+        <td>${formatQuantity(row.testing)}</td>
+        <td>${formatQuantity(netSale)}</td>
+        <td>${formatQuantity(row.stock)}</td>
+        <td>${formatQuantity(row.opening_stock)}</td>
+        <td>${formatQuantity(row.receipts)}</td>
+        <td>${formatQuantity(row.closing_stock)}</td>
+        <td>${formatQuantity(row.variation)}</td>
+      </tr>`;
+    })
+    .join("");
+}
+
 async function loadDailySummary(startDate, endDate) {
-  const tbody = document.getElementById("sales-daily-body");
-  if (!tbody) return;
-  tbody.innerHTML = "<tr><td colspan='12' class='muted'>Loading…</td></tr>";
+  const tbodyPetrol = document.getElementById("sales-daily-petrol-body");
+  const tbodyDiesel = document.getElementById("sales-daily-diesel-body");
+  if (!tbodyPetrol || !tbodyDiesel) return;
+  setProductTableLoading(tbodyPetrol);
+  setProductTableLoading(tbodyDiesel);
 
   const [
     { data: dsrData, error: dsrError },
@@ -97,39 +147,24 @@ async function loadDailySummary(startDate, endDate) {
   ]);
 
   if (dsrError || stockError) {
-    const message = dsrError?.message ?? stockError?.message ?? "Unable to load.";
-    tbody.innerHTML = `<tr><td colspan="12" class="error">${message}</td></tr>`;
+    const message = escapeHtml(dsrError?.message ?? stockError?.message ?? "Unable to load.");
+    const errRow = `<tr><td colspan="${TABLE_COLS}" class="error">${message}</td></tr>`;
+    tbodyPetrol.innerHTML = errRow;
+    tbodyDiesel.innerHTML = errRow;
     return;
   }
 
   const combined = mergeDailyData(dsrData ?? [], stockData ?? []);
-
-  if (!combined.length) {
-    tbody.innerHTML =
-      "<tr><td colspan='12' class='muted'>No entries found.</td></tr>";
-    return;
+  const petrolRows = [];
+  const dieselRows = [];
+  for (const row of combined) {
+    const p = (row.product || "").toLowerCase();
+    if (p === "petrol") petrolRows.push(row);
+    else if (p === "diesel") dieselRows.push(row);
   }
 
-  tbody.innerHTML = "";
-  combined.forEach((row) => {
-    const netSale = Number(row.total_sales ?? 0) - Number(row.testing ?? 0);
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${row.date}</td>
-      <td>${row.product}</td>
-      <td>${formatQuantity(row.sales_pump1)}</td>
-      <td>${formatQuantity(row.sales_pump2)}</td>
-      <td>${formatQuantity(row.total_sales)}</td>
-      <td>${formatQuantity(row.testing)}</td>
-      <td>${formatQuantity(netSale)}</td>
-      <td>${formatQuantity(row.stock)}</td>
-      <td>${formatQuantity(row.opening_stock)}</td>
-      <td>${formatQuantity(row.receipts)}</td>
-      <td>${formatQuantity(row.closing_stock)}</td>
-      <td>${formatQuantity(row.variation)}</td>
-    `;
-    tbody.appendChild(tr);
-  });
+  renderProductRows(tbodyPetrol, petrolRows);
+  renderProductRows(tbodyDiesel, dieselRows);
 }
 
 function mergeDailyData(dsrRows, stockRows) {
