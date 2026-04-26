@@ -1,4 +1,4 @@
-/* global supabaseClient, requireAuth, applyRoleVisibility, AppCache, invalidateUserRoleCache, AppError */
+/* global supabaseClient, requireAuth, applyRoleVisibility, AppCache, invalidateUserRoleCache, AppError, formatCurrency */
 
 // Simple HTML escape for XSS prevention
 function escapeHtml(str) {
@@ -107,14 +107,13 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (typeof invalidateUserRoleCache === "function") {
         invalidateUserRoleCache(email);
       }
-      if (typeof AppCache !== "undefined" && AppCache) {
-        AppCache.invalidateByType("staff_list");
-      }
+      invalidateEmployeeListCache();
       loadStaffList();
     });
   }
 
   loadStaffList();
+  initManageEmployees(auth);
   initShiftsForm();
   initLowStockForm();
   initAlertsForm();
@@ -377,6 +376,222 @@ function initAlertsForm() {
       successEl?.classList.remove("hidden");
     } catch (_) {}
   });
+}
+
+function invalidateEmployeeListCache() {
+  if (typeof AppCache !== "undefined" && AppCache) {
+    AppCache.invalidateByType("staff_list");
+  }
+}
+
+/**
+ * CRUD for `employees` (salary / attendance roster). Settings is admin-only.
+ */
+function initManageEmployees(auth) {
+  const staffMemberForm = document.getElementById("emp-member-form");
+  const staffFormSuccess = document.getElementById("emp-form-success");
+  const staffFormError = document.getElementById("emp-form-error");
+  const staffSubmitBtn = document.getElementById("emp-submit-btn");
+  const staffCancelBtn = document.getElementById("emp-cancel-btn");
+  const membersTbody = document.getElementById("emp-members-body");
+  const idInput = document.getElementById("emp-member-id");
+  const nameInput = document.getElementById("emp-name");
+  const roleInput = document.getElementById("emp-job-role");
+  const salaryInput = document.getElementById("emp-monthly-salary");
+  if (!staffMemberForm || !membersTbody) return;
+
+  let staffList = [];
+  let staffListLoadError = null;
+
+  async function loadStaffMembers() {
+    const { data, error } = await supabaseClient
+      .from("employees")
+      .select("id, name, role_display, monthly_salary, display_order")
+      .eq("is_active", true)
+      .order("display_order", { ascending: true })
+      .order("name", { ascending: true });
+
+    if (error) {
+      staffListLoadError = error;
+      staffList = [];
+      AppError.report(error, { context: "loadStaffMembers" });
+      return [];
+    }
+    staffListLoadError = null;
+    staffList = data ?? [];
+    return staffList;
+  }
+
+  async function refreshMemberTable() {
+    await loadStaffMembers();
+    renderStaffMembersTable();
+  }
+
+  async function afterDeleteSuccess(message) {
+    invalidateEmployeeListCache();
+    if (staffFormSuccess) {
+      staffFormSuccess.textContent = message;
+      staffFormSuccess.classList.remove("hidden");
+    }
+    await refreshMemberTable();
+  }
+
+  function applyEditToForm(id, name, role, salary) {
+    if (idInput) idInput.value = id;
+    if (nameInput) nameInput.value = name;
+    if (roleInput) roleInput.value = role;
+    if (salaryInput) salaryInput.value = salary;
+    if (staffSubmitBtn) staffSubmitBtn.textContent = "Update";
+    if (staffCancelBtn) staffCancelBtn.classList.remove("hidden");
+  }
+
+  function renderStaffMembersTable() {
+    if (staffListLoadError) {
+      membersTbody.innerHTML = `<tr><td colspan="4" class="error">${escapeHtml(AppError.getUserMessage(staffListLoadError))}</td></tr>`;
+      return;
+    }
+
+    if (!staffList.length) {
+      membersTbody.innerHTML = "<tr><td colspan=\"4\" class=\"muted\">No staff yet. Add people using the form above.</td></tr>";
+      return;
+    }
+
+    membersTbody.innerHTML = staffList
+      .map(
+        (s) => `
+        <tr>
+          <td>${escapeHtml(s.name)}</td>
+          <td>${escapeHtml(s.role_display ?? "—")}</td>
+          <td>${formatCurrency(s.monthly_salary)}</td>
+          <td>
+            <button type="button" class="edit-emp-staff-btn button-secondary" data-id="${escapeHtml(s.id)}" data-name="${escapeHtml(s.name)}" data-role="${escapeHtml(s.role_display ?? "")}" data-salary="${escapeHtml(String(s.monthly_salary ?? 0))}">Edit</button><button type="button" class="delete-emp-staff-btn button-secondary" data-id="${escapeHtml(s.id)}" data-name="${escapeHtml(s.name)}" style="margin-left:0.35rem">Delete</button>
+          </td>
+        </tr>
+      `
+      )
+      .join("");
+  }
+
+  membersTbody.addEventListener("click", (e) => {
+    const t = e.target;
+    if (!(t instanceof Element)) return;
+    const delBtn = t.closest(".delete-emp-staff-btn");
+    if (delBtn) {
+      e.preventDefault();
+      const id = delBtn.getAttribute("data-id");
+      const name = delBtn.getAttribute("data-name");
+      if (id) void handleDeleteEmployee(id, name || "this person");
+      return;
+    }
+    const editBtn = t.closest(".edit-emp-staff-btn");
+    if (editBtn) {
+      e.preventDefault();
+      applyEditToForm(
+        editBtn.getAttribute("data-id") || "",
+        editBtn.getAttribute("data-name") || "",
+        editBtn.getAttribute("data-role") || "",
+        editBtn.getAttribute("data-salary") || ""
+      );
+    }
+  });
+
+  async function handleDeleteEmployee(id, name) {
+    if (!window.confirm(`Remove ${name} from the active staff list?`)) return;
+    staffFormError?.classList.add("hidden");
+    staffFormSuccess?.classList.add("hidden");
+    const { error: delErr } = await supabaseClient.from("employees").delete().eq("id", id);
+    if (!delErr) {
+      await afterDeleteSuccess("Staff member removed.");
+      return;
+    }
+    const msg = (delErr.message || "").toLowerCase();
+    const isFk = delErr.code === "23503" || msg.includes("foreign key") || msg.includes("constraint");
+    if (isFk) {
+      const { error: upErr } = await supabaseClient
+        .from("employees")
+        .update({ is_active: false })
+        .eq("id", id);
+      if (upErr) {
+        AppError.handle(upErr, { target: staffFormError });
+        return;
+      }
+      await afterDeleteSuccess(
+        "Staff member removed from the list (kept in the system because of past salary or attendance)."
+      );
+      return;
+    }
+    AppError.handle(delErr, { target: staffFormError });
+  }
+
+  staffMemberForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (staffSubmitBtn) {
+      staffSubmitBtn.disabled = true;
+      staffSubmitBtn.textContent = "Saving…";
+    }
+    staffFormSuccess?.classList.add("hidden");
+    staffFormError?.classList.add("hidden");
+
+    const id = idInput?.value?.trim() || null;
+    const name = nameInput?.value?.trim();
+    const roleDisplay = roleInput?.value?.trim() || null;
+    const monthlySalary = Number(salaryInput?.value || 0);
+
+    if (!name) {
+      if (staffSubmitBtn) {
+        staffSubmitBtn.disabled = false;
+        staffSubmitBtn.textContent = staffCancelBtn?.classList.contains("hidden") ? "Add staff" : "Update";
+      }
+      staffFormError?.classList.remove("hidden");
+      if (staffFormError) staffFormError.textContent = "Name is required.";
+      return;
+    }
+
+    const payload = {
+      name: name,
+      role_display: roleDisplay,
+      monthly_salary: monthlySalary,
+    };
+    if (auth.session?.user?.id) payload.created_by = auth.session.user.id;
+
+    if (id) {
+      const { error } = await supabaseClient.from("employees").update(payload).eq("id", id);
+      if (staffSubmitBtn) { staffSubmitBtn.disabled = false; staffSubmitBtn.textContent = staffCancelBtn?.classList.contains("hidden") ? "Add staff" : "Update"; }
+      if (error) {
+        AppError.handle(error, { target: staffFormError });
+        return;
+      }
+    } else {
+      const { error } = await supabaseClient.from("employees").insert(payload);
+      if (staffSubmitBtn) { staffSubmitBtn.disabled = false; staffSubmitBtn.textContent = "Add staff"; }
+      if (error) {
+        AppError.handle(error, { target: staffFormError });
+        return;
+      }
+    }
+
+    staffMemberForm.reset();
+    if (idInput) idInput.value = "";
+    invalidateEmployeeListCache();
+    if (staffSubmitBtn) {
+      staffSubmitBtn.disabled = false;
+      staffSubmitBtn.textContent = "Add staff";
+    }
+    if (staffCancelBtn) staffCancelBtn.classList.add("hidden");
+    staffFormSuccess?.classList.remove("hidden");
+    await refreshMemberTable();
+  });
+
+  if (staffCancelBtn) {
+    staffCancelBtn.addEventListener("click", () => {
+      staffMemberForm.reset();
+      if (idInput) idInput.value = "";
+      if (staffSubmitBtn) staffSubmitBtn.textContent = "Add staff";
+      staffCancelBtn.classList.add("hidden");
+    });
+  }
+
+  void refreshMemberTable();
 }
 
 async function loadStaffList() {
