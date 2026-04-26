@@ -14,7 +14,7 @@
     <script defer src="js/utils.js?v=3"></script>
     <script defer src="js/supabase.js"></script>
     <script defer src="js/auth.js?v=2"></script>
-    <script defer src="js/sales-daily.js?v=2"></script>
+    <script defer src="js/sales-daily.js?v=4"></script>
   </head>
   <body>
     <header class="topbar">
@@ -80,13 +80,12 @@
       </section>
 
       <section class="card">
-        <h2>Daily entries</h2>
+        <h2>Petrol — daily entries</h2>
         <div class="table-scroll">
           <table class="dsr-table">
             <thead>
               <tr>
                 <th>Date</th>
-                <th>Product</th>
                 <th>Sales P1 (L)</th>
                 <th>Sales P2 (L)</th>
                 <th>Total sales (L)</th>
@@ -99,9 +98,37 @@
                 <th>Variation (L)</th>
               </tr>
             </thead>
-            <tbody id="sales-daily-body">
+            <tbody id="sales-daily-petrol-body">
               <tr>
-                <td colspan="12" class="muted">Loading…</td>
+                <td colspan="11" class="muted">Loading…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Diesel — daily entries</h2>
+        <div class="table-scroll">
+          <table class="dsr-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Sales P1 (L)</th>
+                <th>Sales P2 (L)</th>
+                <th>Total sales (L)</th>
+                <th>Testing (L)</th>
+                <th>Net sale (L)</th>
+                <th>Dip stock (L)</th>
+                <th>Opening stock (L)</th>
+                <th>Receipts (L)</th>
+                <th>Closing stock (L)</th>
+                <th>Variation (L)</th>
+              </tr>
+            </thead>
+            <tbody id="sales-daily-diesel-body">
+              <tr>
+                <td colspan="11" class="muted">Loading…</td>
               </tr>
             </tbody>
           </table>

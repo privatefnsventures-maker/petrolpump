@@ -526,14 +526,16 @@ create policy "employees_select_authenticated" on public.employees
   for select to authenticated using (true);
 
 drop policy if exists "employees_insert_own_or_admin" on public.employees;
-create policy "employees_insert_own_or_admin" on public.employees
-  for insert to authenticated with check (created_by = auth.uid() or public.is_admin());
+drop policy if exists "employees_insert_admin" on public.employees;
+create policy "employees_insert_admin" on public.employees
+  for insert to authenticated with check (public.is_admin());
 
 drop policy if exists "employees_update_by_role" on public.employees;
-create policy "employees_update_by_role" on public.employees
+drop policy if exists "employees_update_admin" on public.employees;
+create policy "employees_update_admin" on public.employees
   for update to authenticated
-  using (created_by = auth.uid() or public.is_admin())
-  with check (created_by = auth.uid() or public.is_admin());
+  using (public.is_admin())
+  with check (public.is_admin());
 
 drop policy if exists "employees_delete_admin" on public.employees;
 create policy "employees_delete_admin" on public.employees

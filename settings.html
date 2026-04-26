@@ -113,6 +113,69 @@
           <p id="settings-error" class="error hidden"></p>
         </form>
       </section>
+      <section class="card" id="manage-staff-section">
+        <h2>Manage staff (HR)</h2>
+        <p class="muted">
+          Add, edit, or remove who appears on salary and attendance lists. Job title and monthly pay are stored here. App login roles for operators are set in the section above.
+        </p>
+        <form id="emp-member-form" class="form" autocomplete="off">
+          <input type="hidden" id="emp-member-id" name="id" value="" />
+          <div class="form-grid">
+            <div class="form-field">
+              <label for="emp-name">Name</label>
+              <input
+                id="emp-name"
+                name="name"
+                type="text"
+                maxlength="120"
+                placeholder="Staff name"
+                required
+              />
+            </div>
+            <div class="form-field">
+              <label for="emp-job-role">Job title / role</label>
+              <input
+                id="emp-job-role"
+                name="role_display"
+                type="text"
+                maxlength="60"
+                placeholder="e.g. Supervisor, Operator"
+              />
+            </div>
+            <div class="form-field">
+              <label for="emp-monthly-salary">Monthly salary (₹)</label>
+              <input
+                id="emp-monthly-salary"
+                name="monthly_salary"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0"
+                required
+              />
+            </div>
+          </div>
+          <button type="submit" id="emp-submit-btn">Add staff</button>
+          <button type="button" id="emp-cancel-btn" class="button-secondary hidden">Cancel</button>
+          <p id="emp-form-success" class="success hidden">Saved.</p>
+          <p id="emp-form-error" class="error hidden"></p>
+        </form>
+        <table class="margin-top">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Job title</th>
+              <th>Monthly salary (₹)</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="emp-members-body">
+            <tr>
+              <td colspan="4" class="muted">Loading…</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
       <section class="card">
         <h2>Attendance shifts</h2>
         <p class="muted">Set shift names and times. On the Attendance page, choosing a shift will pre-fill check-in and check-out for that row.</p>

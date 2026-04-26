@@ -34,11 +34,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   const paymentStaffSelect = document.getElementById("payment-staff");
   const paymentDateInput = document.getElementById("payment-date");
   const salaryMonthInput = document.getElementById("salary-month");
-  const staffMemberForm = document.getElementById("staff-member-form");
-  const staffFormSuccess = document.getElementById("staff-form-success");
-  const staffFormError = document.getElementById("staff-form-error");
-  const staffSubmitBtn = document.getElementById("staff-submit-btn");
-  const staffCancelBtn = document.getElementById("staff-cancel-btn");
 
   if (paymentDateInput) {
     paymentDateInput.value = new Date().toISOString().slice(0, 10);
@@ -112,7 +107,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!tbody) return;
 
     if (!staffList.length) {
-      tbody.innerHTML = "<tr><td colspan=\"6\" class=\"muted\">Add staff in “Manage staff” (admin) first.</td></tr>";
+      tbody.innerHTML = "<tr><td colspan=\"6\" class=\"muted\">Add staff in <a href=\"settings.html#manage-staff-section\">Settings → Manage staff (HR)</a> first (admin).</td></tr>";
       return;
     }
 
@@ -194,64 +189,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       .join("");
   }
 
-  async function renderStaffMembersTable() {
-    const tbody = document.getElementById("staff-members-body");
-    if (!tbody) return;
-
-    const { data, error } = await supabaseClient
-      .from("employees")
-      .select("id, name, role_display, monthly_salary, display_order")
-      .order("display_order", { ascending: true })
-      .order("name", { ascending: true });
-
-    if (error) {
-      tbody.innerHTML = `<tr><td colspan="4" class="error">${escapeHtml(AppError.getUserMessage(error))}</td></tr>`;
-      AppError.report(error, { context: "renderStaffMembersTable" });
-      return;
-    }
-
-    const list = data ?? [];
-    if (!list.length) {
-      tbody.innerHTML = "<tr><td colspan=\"4\" class=\"muted\">No staff added. Add staff above.</td></tr>";
-      return;
-    }
-
-    tbody.innerHTML = list
-      .map((s) => `
-        <tr>
-          <td>${escapeHtml(s.name)}</td>
-          <td>${escapeHtml(s.role_display ?? "—")}</td>
-          <td>${formatCurrency(s.monthly_salary)}</td>
-          <td>
-            <button type="button" class="edit-staff-btn button-secondary" data-id="${escapeHtml(s.id)}" data-name="${escapeHtml(s.name)}" data-role="${escapeHtml(s.role_display ?? "")}" data-salary="${escapeHtml(String(s.monthly_salary ?? 0))}">Edit</button>
-          </td>
-        </tr>
-      `)
-      .join("");
-
-    tbody.querySelectorAll(".edit-staff-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const id = btn.getAttribute("data-id");
-        const name = btn.getAttribute("data-name");
-        const role = btn.getAttribute("data-role");
-        const salary = btn.getAttribute("data-salary");
-        document.getElementById("staff-member-id").value = id;
-        document.getElementById("staff-name").value = name;
-        document.getElementById("staff-role").value = role;
-        document.getElementById("staff-monthly-salary").value = salary;
-        if (staffSubmitBtn) staffSubmitBtn.textContent = "Update";
-        if (staffCancelBtn) staffCancelBtn.classList.remove("hidden");
-      });
-    });
-  }
-
   async function refreshAll() {
     await loadStaffMembers();
     fillStaffSelect(paymentStaffSelect);
     const monthVal = salaryMonthInput?.value;
     if (monthVal) await renderSummary(monthVal);
     await loadRecentPayments();
-    await renderStaffMembersTable();
   }
 
   if (paymentForm) {
@@ -330,75 +273,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     salaryMonthInput.addEventListener("change", async () => {
       const val = salaryMonthInput.value;
       if (val) await renderSummary(val);
-    });
-  }
-
-  if (staffMemberForm) {
-    staffMemberForm.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      if (staffSubmitBtn) {
-        staffSubmitBtn.disabled = true;
-        staffSubmitBtn.textContent = "Saving…";
-      }
-      staffFormSuccess?.classList.add("hidden");
-      staffFormError?.classList.add("hidden");
-
-      const id = document.getElementById("staff-member-id")?.value?.trim() || null;
-      const name = document.getElementById("staff-name")?.value?.trim();
-      const roleDisplay = document.getElementById("staff-role")?.value?.trim() || null;
-      const monthlySalary = Number(document.getElementById("staff-monthly-salary")?.value || 0);
-
-      if (!name) {
-        staffFormError?.classList.remove("hidden");
-        if (staffFormError) staffFormError.textContent = "Name is required.";
-        return;
-      }
-
-      const payload = {
-        name: name,
-        role_display: roleDisplay,
-        monthly_salary: monthlySalary,
-      };
-      if (auth.session?.user?.id) payload.created_by = auth.session.user.id;
-
-      if (id) {
-        const { error } = await supabaseClient.from("employees").update(payload).eq("id", id);
-        if (staffSubmitBtn) { staffSubmitBtn.disabled = false; staffSubmitBtn.textContent = staffCancelBtn?.classList.contains("hidden") ? "Add staff" : "Update"; }
-        if (error) {
-          AppError.handle(error, { target: staffFormError });
-          return;
-        }
-      } else {
-        const { error } = await supabaseClient.from("employees").insert(payload);
-        if (staffSubmitBtn) { staffSubmitBtn.disabled = false; staffSubmitBtn.textContent = "Add staff"; }
-        if (error) {
-          AppError.handle(error, { target: staffFormError });
-          return;
-        }
-      }
-
-      staffMemberForm.reset();
-      document.getElementById("staff-member-id").value = "";
-      // Invalidate cache so other pages see updated staff list immediately
-      if (typeof AppCache !== "undefined" && AppCache) {
-        AppCache.invalidateByType("staff_list");
-      }
-      if (staffSubmitBtn) {
-        staffSubmitBtn.disabled = false;
-        staffSubmitBtn.textContent = "Add staff";
-      }
-      if (staffCancelBtn) staffCancelBtn.classList.add("hidden");
-      staffFormSuccess?.classList.remove("hidden");
-      await refreshAll();
-    });
-  }
-
-  if (staffCancelBtn) {
-    staffCancelBtn.addEventListener("click", () => {
-      staffMemberForm?.reset();
-      document.getElementById("staff-member-id").value = "";
-      if (staffSubmitBtn) staffSubmitBtn.textContent = "Add staff";
-      staffCancelBtn.classList.add("hidden");
     });
   }
 
